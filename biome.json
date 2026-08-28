@@ -3,6 +3,7 @@
   "files": {
     "includes": [
       "control-plane/**/*.{ts,tsx}",
+      "data-plane/**/*.ts",
       "web/**/*.{ts,tsx}",
       "vite.config.ts",
       "vitest.config.ts",

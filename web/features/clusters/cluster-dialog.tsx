@@ -7,9 +7,6 @@ const blank: ClusterInput = {
   description: '',
   apiServerUrl: '',
   prometheusUrl: '',
-  accessMode: 'connector',
-  connectorId: '',
-  connectorUrl: '',
   enabled: true,
   default: false,
 }
@@ -42,9 +39,6 @@ export function ClusterDialog({
               description: cluster.description,
               apiServerUrl: cluster.apiServerUrl,
               prometheusUrl: cluster.prometheusUrl,
-              accessMode: cluster.accessMode,
-              connectorId: cluster.connectorId,
-              connectorUrl: cluster.connectorUrl,
               enabled: cluster.enabled,
               default: cluster.default,
             }
@@ -61,12 +55,7 @@ export function ClusterDialog({
   ) => setValue((current) => ({ ...current, [name]: next }))
   function submit(event: FormEvent) {
     event.preventDefault()
-    onSave(
-      id,
-      value.accessMode === 'connector'
-        ? { ...value, apiServerUrl: '', connectorId: id }
-        : { ...value, connectorId: '', connectorUrl: '' },
-    )
+    onSave(id, value)
   }
   return (
     <dialog
@@ -126,76 +115,20 @@ export function ClusterDialog({
               placeholder="Purpose, owner, or environment"
             />
           </label>
-          <fieldset className="span-2">
-            <legend>Connection mode</legend>
-            <div className="choice-row">
-              <label
-                className={
-                  value.accessMode === 'connector'
-                    ? 'choice selected'
-                    : 'choice'
-                }
-              >
-                <input
-                  type="radio"
-                  name="mode"
-                  checked={value.accessMode === 'connector'}
-                  onChange={() => update('accessMode', 'connector')}
-                />
-                <span>
-                  <b>Connector</b>
-                  <small>
-                    Private clusters through an HTTPS Connector endpoint.
-                  </small>
-                </span>
-              </label>
-              <label
-                className={
-                  value.accessMode === 'direct' ? 'choice selected' : 'choice'
-                }
-              >
-                <input
-                  type="radio"
-                  name="mode"
-                  checked={value.accessMode === 'direct'}
-                  onChange={() => update('accessMode', 'direct')}
-                />
-                <span>
-                  <b>Direct</b>
-                  <small>
-                    Publicly reachable kube-apiserver with OIDC enabled.
-                  </small>
-                </span>
-              </label>
-            </div>
-          </fieldset>
-          {value.accessMode === 'connector' ? (
-            <label className="span-2">
-              Connector URL
-              <input
-                required
-                type="url"
-                value={value.connectorUrl}
-                onChange={(event) => update('connectorUrl', event.target.value)}
-                placeholder="https://connector.example.com"
-              />
-              <small>
-                The Connector keeps Kubernetes endpoint and trust configuration
-                inside the cluster.
-              </small>
-            </label>
-          ) : (
-            <label className="span-2">
-              Kubernetes API server
-              <input
-                required
-                type="url"
-                value={value.apiServerUrl}
-                onChange={(event) => update('apiServerUrl', event.target.value)}
-                placeholder="https://api.example.com:6443"
-              />
-            </label>
-          )}
+          <label className="span-2">
+            Kubernetes API server
+            <input
+              required
+              type="url"
+              value={value.apiServerUrl}
+              onChange={(event) => update('apiServerUrl', event.target.value)}
+              placeholder="https://api.example.com:6443"
+            />
+            <small>
+              Use an endpoint reachable by this Hub deployment. Private clusters
+              can use any standard tunnel or private network.
+            </small>
+          </label>
           <label className="span-2">
             Prometheus URL <span className="optional">Optional</span>
             <input

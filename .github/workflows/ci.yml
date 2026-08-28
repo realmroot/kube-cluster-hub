@@ -11,25 +11,33 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: kube_cluster_hub_test
+          POSTGRES_USER: kube_cluster_hub
+          POSTGRES_PASSWORD: test-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U kube_cluster_hub -d kube_cluster_hub_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      HUB_POSTGRES_TEST_URL: postgres://kube_cluster_hub:test-password@127.0.0.1:5432/kube_cluster_hub_test
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
-        with: { version: 10.30.2 }
+        with: { version: 11.24.0 }
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 26
           cache: pnpm
-      - uses: actions/setup-go@v7
-        with:
-          go-version: '1.26.x'
-          cache: true
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec biome check .
       - run: pnpm typecheck
       - run: pnpm test:coverage
       - run: pnpm test:worker
-      - run: go vet ./internal/connector ./cmd/kube-cluster-connector
-      - run: go test -race ./internal/connector ./cmd/kube-cluster-connector
       - run: pnpm build
       - run: pnpm build:node
-      - run: go build ./cmd/kube-cluster-connector

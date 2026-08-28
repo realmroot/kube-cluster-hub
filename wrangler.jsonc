@@ -13,7 +13,6 @@
   },
   "vars": {
     "HUB_PUBLIC_URL": "https://kube-cluster-hub.saltbo.workers.dev",
-    "HUB_INVENTORY_ACCESS_URL": "https://kube-cluster-hub.saltbo.workers.dev",
     "HUB_UI_CLIENT_ID": "01a046ca-bfb8-72fe-b85b-36cf0052edcf",
     "OIDC_ISSUER": "https://id.realmroot.dev/api/auth",
     "KUBERNETES_OIDC_AUDIENCE": "01a046ca-bfb8-72fe-b85b-36cf0052edcf",
@@ -23,11 +22,6 @@
     "RESOURCE_SERVER_ISSUER": "https://id.realmroot.dev/api/auth",
     "RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS": "realmroot-cli",
     "RESOURCE_SERVER_JWT_ALGORITHMS": "RS256",
-    "KUBERNETES_AGENT_READ_GROUP": "kube-cluster-hub:agents:read",
-    "KUBERNETES_AGENT_WRITE_GROUP": "kube-cluster-hub:agents:write",
-    "DISPATCH_ISSUER": "https://kube-cluster-hub.saltbo.workers.dev",
-    "DISPATCH_AUDIENCE": "kube-cluster-connector",
-    "INVENTORY_CLUSTER_ID": "local-kind",
     "AUDIT_RETENTION": "2160h"
   },
   "assets": {
@@ -42,5 +36,5 @@
       "migrations_dir": "migrations"
     }
   ],
-  "triggers": { "crons": ["*/5 * * * *"] }
+  "triggers": { "crons": ["0 0 * * *"] }
 }

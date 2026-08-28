@@ -1,18 +1,11 @@
-export type AccessMode = 'direct' | 'connector'
-
 export interface Cluster {
   id: string
   displayName: string
   description: string
   apiServerUrl: string
   prometheusUrl: string
-  accessMode: AccessMode
-  connectorId: string
-  connectorUrl: string
   enabled: boolean
   default: boolean
-  inventoryStatus: string
-  inventoryError: string
   resourceVersion: number
   createdAt: string
   updatedAt: string
@@ -24,9 +17,6 @@ export type ClusterInput = Pick<
   | 'description'
   | 'apiServerUrl'
   | 'prometheusUrl'
-  | 'accessMode'
-  | 'connectorId'
-  | 'connectorUrl'
   | 'enabled'
   | 'default'
 >
@@ -39,29 +29,26 @@ export interface UserPrincipal {
   token: string
 }
 
-export interface AgentActor {
-  issuer: string
-  subject: string
-}
-
 export interface AgentPrincipal {
   type: 'agent'
   controllerSubject: string
-  actor: AgentActor
+  actor: {
+    issuer: string
+    subject: string
+  }
   clientId: string
   scopes: readonly string[]
   scope: string
   tokenId: string
+  token: string
 }
-
-export type Principal = UserPrincipal | AgentPrincipal
 
 export interface AuditEvent {
   id: number
   createdAt: string
   requestId: string
   tokenId: string
-  principalType: Principal['type']
+  principalType: 'user' | 'agent'
   controllerSubject: string
   agentIssuer: string
   agentSubject: string
@@ -73,17 +60,6 @@ export interface AuditEvent {
   path: string
   status: number
   durationMillis: number
-}
-
-export interface ConnectorStatus {
-  connectorId: string
-  clusterId: string
-  version: string
-  kubernetesVersion: string
-  capabilities: readonly string[]
-  state: 'ready' | 'degraded'
-  lastError: string
-  observedAt: string
 }
 
 export class NotFoundError extends Error {}
@@ -103,44 +79,18 @@ export function normalizeClusterInput(raw: unknown): ClusterInput {
     throw new ValidationError('request body must be an object')
   const value = raw as Record<string, unknown>
   const displayName = requiredString(value.displayName, 'displayName', 200)
-  const accessMode =
-    value.accessMode === undefined ? 'connector' : value.accessMode
-  if (accessMode !== 'direct' && accessMode !== 'connector') {
-    throw new ValidationError('accessMode must be direct or connector')
-  }
-  const connectorId = optionalString(value.connectorId, 'connectorId', 63)
-  const connectorUrl = optionalConnectorUrl(value.connectorUrl)
-  const suppliedApiServerUrl = optionalString(
-    value.apiServerUrl,
-    'apiServerUrl',
-    4096,
+  const apiServerUrl = apiServerUrlFrom(value.apiServerUrl)
+  if (
+    value.accessMode !== undefined ||
+    value.connectorId !== undefined ||
+    value.connectorUrl !== undefined
   )
-  const apiServerUrl =
-    accessMode === 'direct'
-      ? absoluteUrl(suppliedApiServerUrl, 'apiServerUrl', true)
-      : ''
-  if (accessMode === 'connector') {
-    if (!connectorId)
-      throw new ValidationError(
-        'connectorId is required for connector access mode',
-      )
-    validateClusterId(connectorId)
-    if (!connectorUrl)
-      throw new ValidationError(
-        'connectorUrl is required for connector access mode',
-      )
-    if (suppliedApiServerUrl)
-      throw new ValidationError(
-        'apiServerUrl is only valid for direct access mode; the Connector owns its Kubernetes endpoint',
-      )
-  } else if (connectorId || connectorUrl) {
     throw new ValidationError(
-      'connectorId and connectorUrl are only valid for connector access mode',
+      'connector fields are not supported; apiServerUrl must address the Kubernetes API directly',
     )
-  }
   if (value.caBundle !== undefined || value.tlsServerName !== undefined) {
     throw new ValidationError(
-      'caBundle and tlsServerName are not catalog fields; configure Kubernetes TLS trust in the Connector',
+      'caBundle and tlsServerName are not catalog fields; expose a TLS endpoint trusted by the Hub runtime',
     )
   }
   return {
@@ -148,9 +98,6 @@ export function normalizeClusterInput(raw: unknown): ClusterInput {
     description: optionalString(value.description, 'description', 10_000),
     apiServerUrl,
     prometheusUrl: optionalUrl(value.prometheusUrl, 'prometheusUrl'),
-    accessMode,
-    connectorId,
-    connectorUrl,
     enabled: optionalBoolean(value.enabled, 'enabled', true),
     default: optionalBoolean(value.default, 'default', false),
   }
@@ -227,9 +174,8 @@ function optionalUrl(value: unknown, field: string): string {
   return absoluteUrl(value, field, false)
 }
 
-function optionalConnectorUrl(value: unknown): string {
-  const result = optionalUrl(value, 'connectorUrl')
-  if (!result) return ''
+function apiServerUrlFrom(value: unknown): string {
+  const result = absoluteUrl(value, 'apiServerUrl', false)
   const parsed = new URL(result)
   const loopback =
     parsed.hostname === 'localhost' ||
@@ -237,7 +183,7 @@ function optionalConnectorUrl(value: unknown): string {
     parsed.hostname === '[::1]'
   if (parsed.protocol !== 'https:' && !loopback) {
     throw new ValidationError(
-      'connectorUrl must use HTTPS; HTTP is allowed only for loopback development',
+      'apiServerUrl must use HTTPS; HTTP is allowed only for loopback development',
     )
   }
   return result

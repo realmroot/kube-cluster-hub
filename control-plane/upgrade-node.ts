@@ -1,13 +1,12 @@
 import { request as httpRequest, type IncomingMessage } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import type { Duplex } from 'node:stream'
+import { sanitizedHeaders } from '../data-plane/proxy'
 import { AuthenticationError } from './auth'
 import type { Runtime } from './bootstrap'
 import { kubernetesScope } from './contracts'
-import { sanitizedHeaders } from './dispatch'
 import {
   type AgentPrincipal,
-  type Cluster,
   NotFoundError,
   type UserPrincipal,
 } from './domain'
@@ -131,45 +130,8 @@ async function prepareUpgrade(
   const cluster = await runtime.store.getCluster(clusterId)
   if (!cluster.enabled)
     throw new UpgradeRequestError(503, 'cluster is disabled')
-  if (principal.type === 'agent') {
-    if (cluster.accessMode !== 'connector')
-      throw new UpgradeRequestError(503, 'Agent access requires connector mode')
-    const dispatch = await runtime.dependencies.proxy.signer.forAgent(
-      clusterId,
-      method,
-      uri,
-      requestId,
-      principal,
-    )
-    headers.set('Authorization', `Bearer ${dispatch}`)
-    return {
-      target: connectorTarget(cluster, uri),
-      headers,
-      principal,
-      clusterId,
-      requestId,
-    }
-  }
-
-  if (cluster.accessMode === 'connector') {
-    const dispatch = await runtime.dependencies.proxy.signer.forUser(
-      clusterId,
-      method,
-      uri,
-      requestId,
-      principal,
-    )
-    headers.set('Authorization', `Bearer ${dispatch}`)
-    headers.set('X-Cluster-Authorization', `Bearer ${principal.token}`)
-    return {
-      target: connectorTarget(cluster, uri),
-      headers,
-      principal,
-      clusterId,
-      requestId,
-    }
-  }
   headers.set('Authorization', `Bearer ${principal.token}`)
+  headers.set('Request-Id', requestId)
   return {
     target: `${cluster.apiServerUrl}${uri}`,
     headers,
@@ -177,10 +139,6 @@ async function prepareUpgrade(
     clusterId,
     requestId,
   }
-}
-
-function connectorTarget(cluster: Cluster, uri: string): string {
-  return `${cluster.connectorUrl}/clusters/${encodeURIComponent(cluster.id)}/kubernetes${uri}`
 }
 
 function headersFromIncoming(request: IncomingMessage): Headers {

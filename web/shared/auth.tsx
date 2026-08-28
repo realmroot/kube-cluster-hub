@@ -9,28 +9,6 @@ import {
 } from 'react'
 import type { UiConfig } from './contracts'
 
-class MemoryStorage implements Storage {
-  private readonly values = new Map<string, string>()
-  get length() {
-    return this.values.size
-  }
-  clear() {
-    this.values.clear()
-  }
-  getItem(key: string) {
-    return this.values.get(key) ?? null
-  }
-  key(index: number) {
-    return [...this.values.keys()][index] ?? null
-  }
-  removeItem(key: string) {
-    this.values.delete(key)
-  }
-  setItem(key: string, value: string) {
-    this.values.set(key, value)
-  }
-}
-
 interface AuthValue {
   user: User | null
   loading: boolean
@@ -60,7 +38,7 @@ export function AuthProvider({
         extraQueryParams: { resource: config.resource },
         extraTokenParams: { resource: config.resource },
         stateStore: new WebStorageStateStore({ store: sessionStorage }),
-        userStore: new WebStorageStateStore({ store: new MemoryStorage() }),
+        userStore: new WebStorageStateStore({ store: sessionStorage }),
         automaticSilentRenew: false,
         monitorSession: false,
       }),

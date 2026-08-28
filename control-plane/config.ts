@@ -1,8 +1,5 @@
-import type { JWK } from 'jose'
-
 export interface ConfigSource {
   HUB_PUBLIC_URL?: string
-  HUB_INVENTORY_ACCESS_URL?: string
   HUB_UI_CLIENT_ID?: string
   OIDC_ISSUER?: string
   KUBERNETES_OIDC_AUDIENCE?: string
@@ -12,20 +9,12 @@ export interface ConfigSource {
   RESOURCE_SERVER_ISSUER?: string
   RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS?: string
   RESOURCE_SERVER_JWT_ALGORITHMS?: string
-  KUBERNETES_AGENT_READ_GROUP?: string
-  KUBERNETES_AGENT_WRITE_GROUP?: string
-  DISPATCH_SIGNING_PRIVATE_JWK?: string
-  DISPATCH_ISSUER?: string
-  DISPATCH_AUDIENCE?: string
-  CONNECTOR_STATUS_TOKEN?: string
-  INVENTORY_CLUSTER_ID?: string
   AUDIT_RETENTION?: string
 }
 
 export interface Config {
   publicUrl: string
   catalogUrl: string
-  inventoryAccessUrl: string
   uiClientId: string
   oidcIssuer: string
   oidcAudience: string
@@ -35,13 +24,6 @@ export interface Config {
   resourceIssuer: string
   resourceAuthorizedClients: ReadonlySet<string>
   resourceSigningAlgorithms: readonly string[]
-  agentReadGroup: string
-  agentWriteGroup: string
-  dispatchPrivateJwk: JWK
-  dispatchIssuer: string
-  dispatchAudience: string
-  connectorStatusToken: string
-  inventoryClusterId: string
   auditRetentionMs: number
 }
 
@@ -54,20 +36,10 @@ export function loadConfig(source: ConfigSource): Config {
     source.RESOURCE_SERVER_URL || `${publicUrl}/api/agent`,
     'RESOURCE_SERVER_URL',
   )
-  const dispatchPrivateJwk = parsePrivateJwk(
-    required(
-      source.DISPATCH_SIGNING_PRIVATE_JWK,
-      'DISPATCH_SIGNING_PRIVATE_JWK',
-    ),
-  )
   const auditRetentionMs = parseDuration(source.AUDIT_RETENTION || '2160h')
   return {
     publicUrl,
     catalogUrl: `${publicUrl}/api/catalog`,
-    inventoryAccessUrl: absoluteUrl(
-      source.HUB_INVENTORY_ACCESS_URL || publicUrl,
-      'HUB_INVENTORY_ACCESS_URL',
-    ),
     uiClientId: required(source.HUB_UI_CLIENT_ID, 'HUB_UI_CLIENT_ID'),
     oidcIssuer: absoluteUrl(
       required(source.OIDC_ISSUER, 'OIDC_ISSUER'),
@@ -94,24 +66,6 @@ export function loadConfig(source: ConfigSource): Config {
     resourceSigningAlgorithms: commaList(
       source.RESOURCE_SERVER_JWT_ALGORITHMS || 'RS256',
     ),
-    agentReadGroup:
-      source.KUBERNETES_AGENT_READ_GROUP?.trim() ||
-      'kube-cluster-hub:agents:read',
-    agentWriteGroup:
-      source.KUBERNETES_AGENT_WRITE_GROUP?.trim() ||
-      'kube-cluster-hub:agents:write',
-    dispatchPrivateJwk,
-    dispatchIssuer: absoluteUrl(
-      source.DISPATCH_ISSUER || publicUrl,
-      'DISPATCH_ISSUER',
-    ),
-    dispatchAudience:
-      source.DISPATCH_AUDIENCE?.trim() || 'kube-cluster-hub-connector',
-    connectorStatusToken: required(
-      source.CONNECTOR_STATUS_TOKEN,
-      'CONNECTOR_STATUS_TOKEN',
-    ),
-    inventoryClusterId: source.INVENTORY_CLUSTER_ID?.trim() || '',
     auditRetentionMs,
   }
 }
@@ -157,27 +111,6 @@ function nonEmptySet(
   const items = commaList(value || '')
   if (items.length === 0) throw new Error(`${name} is required`)
   return new Set(items)
-}
-
-function parsePrivateJwk(value: string): JWK {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(value)
-  } catch {
-    throw new Error('DISPATCH_SIGNING_PRIVATE_JWK must be a JSON JWK')
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
-    throw new Error('dispatch signing JWK is invalid')
-  const jwk = parsed as JWK
-  if (
-    jwk.kty !== 'EC' ||
-    jwk.crv !== 'P-256' ||
-    typeof jwk.d !== 'string' ||
-    !jwk.kid
-  ) {
-    throw new Error('dispatch signing JWK must be a P-256 private key with kid')
-  }
-  return jwk
 }
 
 function parseDuration(value: string): number {

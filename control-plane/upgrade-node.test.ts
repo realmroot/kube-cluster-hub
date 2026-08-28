@@ -1,19 +1,16 @@
 import { once } from 'node:events'
 import { createServer, type Server } from 'node:http'
 import { connect } from 'node:net'
-import { exportJWK, generateKeyPair, jwtVerify } from 'jose'
 import { afterEach, describe, expect, it } from 'vitest'
 import { type AppDependencies, createApp } from './app'
 import type { Runtime } from './bootstrap'
 import { type Config, loadConfig } from './config'
 import { NodeDatabaseAdapter } from './database-node'
-import { DispatchSigner } from './dispatch'
 import {
   type AgentPrincipal,
   normalizeClusterInput,
   type UserPrincipal,
 } from './domain'
-import { InventoryPublisher } from './inventory'
 import { migrateNodeDatabase } from './migrate-node'
 import { Store } from './store'
 import { attachNodeUpgradeHandler } from './upgrade-node'
@@ -27,16 +24,12 @@ afterEach(async () => {
 })
 
 describe('Node HTTP Upgrade proxy', () => {
-  it('bridges a Connector WebSocket with a request-bound dispatch and rejects read-only Agent exec', async () => {
+  it('forwards the user token directly and rejects read-only Agent exec', async () => {
     let upstreamAuthorization = ''
-    let upstreamUserAuthorization = ''
     const upstream = createServer()
     servers.push(upstream)
     upstream.on('upgrade', (request, socket) => {
       upstreamAuthorization = request.headers.authorization || ''
-      upstreamUserAuthorization = String(
-        request.headers['x-cluster-authorization'] || '',
-      )
       socket.end(
         'HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\nhello',
       )
@@ -46,86 +39,64 @@ describe('Node HTTP Upgrade proxy', () => {
     const database = new NodeDatabaseAdapter(':memory:')
     databases.push(database)
     migrateNodeDatabase(database)
-    const store = new Store(database)
-    const { config, publicKey } = await testConfig()
+    const store = new Store(database.orm)
+    const config = testConfig()
     await store.createCluster(
       'development',
       normalizeClusterInput({
         displayName: 'Development',
-        apiServerUrl: '',
-        accessMode: 'connector',
-        connectorId: 'development',
-        connectorUrl: `http://127.0.0.1:${upstreamPort}`,
+        apiServerUrl: `http://127.0.0.1:${upstreamPort}`,
       }),
     )
     const user: UserPrincipal = {
       type: 'user',
       subject: 'user-1',
       groups: [],
-      scopes: ['clusters:read', 'clusters:write', 'audit-events:read'],
+      scopes: ['clusters:read'],
       token: 'user-id-token',
     }
     const readOnlyAgent: AgentPrincipal = {
       type: 'agent',
       controllerSubject: 'controller-1',
-      actor: {
-        issuer: config.resourceIssuer,
-        subject: 'agent-1',
-      },
+      actor: { issuer: config.resourceIssuer, subject: 'agent-1' },
       clientId: 'authorized-toolbox-client',
       scopes: ['kubernetes:read'],
       scope: 'kubernetes:read',
       tokenId: 'token-1',
+      token: 'agent-access-token',
     }
-    const signer = await DispatchSigner.create(config)
     const dependencies: AppDependencies = {
       config,
       store,
       catalogUsers: { verify: async () => user },
       kubernetesUsers: { verify: async () => user },
       agents: { verify: async () => readOnlyAgent },
-      proxy: { signer, fetch },
-      inventory: {
-        publishWithStatus: async () => undefined,
-        delete: async () => undefined,
-      },
+      proxy: { fetch },
     }
-    const inventory = new InventoryPublisher(config, store, dependencies.proxy)
     const runtime: Runtime = {
       config,
       store,
-      inventory,
       dependencies,
       app: createApp(dependencies),
     }
-    const controlPlane = createServer((_request, response) =>
+    const hub = createServer((_request, response) =>
       response.writeHead(404).end(),
     )
-    servers.push(controlPlane)
-    attachNodeUpgradeHandler(controlPlane, runtime)
-    const controlPlanePort = await listen(controlPlane)
+    servers.push(hub)
+    attachNodeUpgradeHandler(hub, runtime)
+    const hubPort = await listen(hub)
 
     const response = await rawUpgrade(
-      controlPlanePort,
+      hubPort,
       '/clusters/development/kubernetes/api/v1/namespaces/default/pods/app/exec?command=sh',
       'Bearer user-id-token',
     )
     expect(response).toContain('101 Switching Protocols')
     expect(response).toContain('hello')
-    expect(upstreamUserAuthorization).toBe('Bearer user-id-token')
-    const dispatch = upstreamAuthorization.slice('Bearer '.length)
-    const verified = await jwtVerify(dispatch, publicKey, {
-      issuer: config.dispatchIssuer,
-      audience: config.dispatchAudience,
-    })
-    expect(verified.payload).toMatchObject({
-      cluster_id: 'development',
-      uri: '/api/v1/namespaces/default/pods/app/exec?command=sh',
-      principal_type: 'user',
-    })
+    expect(upstreamAuthorization).toBe('Bearer user-id-token')
 
     const denied = await rawUpgrade(
-      controlPlanePort,
+      hubPort,
       '/api/agent/clusters/development/kubernetes/api/v1/namespaces/default/pods/app/exec?command=sh',
       'DPoP agent-token',
       'proof',
@@ -135,25 +106,16 @@ describe('Node HTTP Upgrade proxy', () => {
   })
 })
 
-async function testConfig(): Promise<{ config: Config; publicKey: CryptoKey }> {
-  const pair = await generateKeyPair('ES256', { extractable: true })
-  const privateJwk = await exportJWK(pair.privateKey)
-  privateJwk.kid = 'dispatch-test'
-  privateJwk.alg = 'ES256'
-  return {
-    publicKey: pair.publicKey,
-    config: loadConfig({
-      HUB_PUBLIC_URL: 'http://127.0.0.1:8080',
-      HUB_UI_CLIENT_ID: 'kubernetes-client',
-      OIDC_ISSUER: 'https://identity.example.test',
-      KUBERNETES_OIDC_AUDIENCE: 'kubernetes-client',
-      CATALOG_ADMIN_GROUPS: 'platform-admins',
-      RESOURCE_SERVER_ISSUER: 'https://identity.example.test',
-      RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS: 'authorized-toolbox-client',
-      DISPATCH_SIGNING_PRIVATE_JWK: JSON.stringify(privateJwk),
-      CONNECTOR_STATUS_TOKEN: 'status-secret',
-    }),
-  }
+function testConfig(): Config {
+  return loadConfig({
+    HUB_PUBLIC_URL: 'http://127.0.0.1:8080',
+    HUB_UI_CLIENT_ID: 'kubernetes-client',
+    OIDC_ISSUER: 'https://identity.example.test',
+    KUBERNETES_OIDC_AUDIENCE: 'kubernetes-client',
+    CATALOG_ADMIN_GROUPS: 'platform-admins',
+    RESOURCE_SERVER_ISSUER: 'https://identity.example.test',
+    RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS: 'authorized-toolbox-client',
+  })
 }
 
 async function listen(server: Server): Promise<number> {
@@ -182,8 +144,8 @@ async function rawUpgrade(
   socket.write(
     `GET ${path} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nAuthorization: ${authorization}\r\n${dpop ? `DPoP: ${dpop}\r\n` : ''}\r\n`,
   )
-  const chunks: Buffer[] = []
-  socket.on('data', (chunk) => chunks.push(chunk))
+  const chunks: Uint8Array[] = []
+  socket.on('data', (chunk: Uint8Array) => chunks.push(chunk))
   await once(socket, 'close')
   return Buffer.concat(chunks).toString()
 }

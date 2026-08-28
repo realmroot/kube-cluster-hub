@@ -124,7 +124,7 @@ function SignIn({ error, login }: { error: string; login(): Promise<void> }) {
           <ul>
             <li>
               <CloudCog />
-              Optional Connector for private clusters
+              Bring your own tunnel or private network
             </li>
             <li>
               <Server />

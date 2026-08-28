@@ -4,24 +4,13 @@ metadata:
   name: kube-cluster-hub-system
 ---
 apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: kube-cluster-hub-data
-  namespace: kube-cluster-hub-system
-spec:
-  accessModes: [ReadWriteOnce]
-  resources:
-    requests:
-      storage: 1Gi
----
-apiVersion: v1
 kind: ConfigMap
 metadata:
   name: kube-cluster-hub
   namespace: kube-cluster-hub-system
 data:
   HUB_PUBLIC_URL: https://clusters.example.com
-  HUB_INVENTORY_ACCESS_URL: https://clusters.example.com
+  HUB_UI_CLIENT_ID: kubernetes-client
   OIDC_ISSUER: https://identity.example.com
   KUBERNETES_OIDC_AUDIENCE: kubernetes-client
   OIDC_GROUPS_CLAIM: groups
@@ -30,9 +19,7 @@ data:
   RESOURCE_SERVER_ISSUER: https://identity.example.com
   RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS: authorized-toolbox-client
   RESOURCE_SERVER_JWT_ALGORITHMS: RS256
-  DISPATCH_ISSUER: https://clusters.example.com
-  DISPATCH_AUDIENCE: kube-cluster-connector
-  INVENTORY_CLUSTER_ID: management
+  AUDIT_RETENTION: 2160h
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -40,9 +27,11 @@ metadata:
   name: kube-cluster-hub
   namespace: kube-cluster-hub-system
 spec:
-  replicas: 1
+  replicas: 2
   strategy:
-    type: Recreate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: kube-cluster-hub
@@ -51,23 +40,26 @@ spec:
       labels:
         app.kubernetes.io/name: kube-cluster-hub
     spec:
+      terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
         fsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
       containers:
-        - name: control-plane
+        - name: hub
           image: kube-cluster-hub:dev
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
                 name: kube-cluster-hub
-            - secretRef:
-                name: kube-cluster-hub-secrets
           env:
             - name: PORT
               value: "8080"
-            - name: HUB_DATABASE_DSN
-              value: /data/control-plane.db
+            - name: HUB_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: kube-cluster-hub-secrets
+                  key: database-url
           ports:
             - name: http
               containerPort: 8080
@@ -82,13 +74,17 @@ spec:
             allowPrivilegeEscalation: false
             capabilities: {drop: [ALL]}
             readOnlyRootFilesystem: true
-          volumeMounts:
-            - name: data
-              mountPath: /data
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: kube-cluster-hub-data
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kube-cluster-hub
+  namespace: kube-cluster-hub-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kube-cluster-hub
 ---
 apiVersion: v1
 kind: Service

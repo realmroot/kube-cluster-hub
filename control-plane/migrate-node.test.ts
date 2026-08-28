@@ -7,7 +7,7 @@ let database: NodeDatabaseAdapter | undefined
 afterEach(() => database?.raw.close())
 
 describe('Node database migration', () => {
-  it('preserves safe legacy clusters and disables custom-CA clusters until a Connector is configured', () => {
+  it('preserves legacy endpoints and disables rows that require migration', () => {
     database = new NodeDatabaseAdapter(':memory:')
     database.raw.exec(`
       CREATE TABLE clusters (
@@ -34,22 +34,18 @@ describe('Node database migration', () => {
     migrateNodeDatabase(database)
 
     const rows = database.raw
-      .prepare(
-        'SELECT id, access_mode, enabled, inventory_status FROM clusters ORDER BY id',
-      )
+      .prepare('SELECT id, api_server_url, enabled FROM clusters ORDER BY id')
       .all() as Array<Record<string, unknown>>
     expect(rows).toEqual([
       {
         id: 'private',
-        access_mode: 'connector',
+        api_server_url: 'https://kubernetes.default.svc',
         enabled: 0,
-        inventory_status: 'migration-required',
       },
       {
         id: 'public',
-        access_mode: 'direct',
+        api_server_url: 'https://api.example.test',
         enabled: 1,
-        inventory_status: 'published',
       },
     ])
     expect(

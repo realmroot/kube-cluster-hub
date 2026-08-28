@@ -1,74 +1,14 @@
-# Headlamp upstream proposal
+# Headlamp upstream direction
 
-## Problem
+The Hub does not patch or fork Headlamp. Official Headlamp can connect to a cluster configured with its Realmroot OIDC client and use the current user's token, but it does not currently consume the Hub catalog contract.
 
-Cluster Inventory API v0.1.3 resolves every configured AccessProvider through
-an exec credential plugin. That is correct for providers which produce a
-credential, but it prevents a dashboard from using a ClusterProfile only as
-connection metadata while authenticating each request with the dashboard's
-already configured current-user OIDC session.
+The desired upstream capability is a generic external cluster-catalog provider:
 
-Using a fake executable is unsafe and operationally brittle. Storing a token or
-kubeconfig in the ClusterProfile would violate the inventory boundary.
+1. discover a versioned catalog endpoint through a URL configured by the operator;
+2. read only cluster identity, display metadata, API endpoint, and optional metrics hint;
+3. authenticate catalog reads with the current OIDC session;
+4. authenticate Kubernetes requests with Headlamp's current Kubernetes OIDC token;
+5. never import a token, kubeconfig, exec command, or Hub-specific credential;
+6. preserve existing static and Cluster Inventory providers unchanged.
 
-## Proposed generic Headlamp behavior
-
-Allow a provider entry with a `name` and no `execConfig` when deployment-level
-OIDC is configured:
-
-```yaml
-config:
-  oidc:
-    clientID: kubernetes-dashboard-client
-    issuerURL: https://identity.example.com
-    scopes: email,profile,groups,offline_access
-    usePKCE: true
-  clusterInventory:
-    enabled: true
-    accessProvidersConfig:
-      providers:
-        - name: oidc-passthrough
-```
-
-For the first matching credentialless provider, Headlamp copies only the
-ClusterProfile server, CA, insecure-TLS, and proxy metadata into a context and
-inherits its deployment OIDC configuration. A provider with `execConfig`
-continues through the upstream Cluster Inventory SDK unchanged. A
-credentialless provider without OIDC fails closed.
-
-The implementation changes only:
-
-- `backend/pkg/clusterinventory/clusterinventory.go`;
-- its unit tests;
-- `backend/cmd/headlamp.go` to pass the deployment OIDC config into the runner.
-
-Long-running sessions also exposed an independent upstream OIDC issue: adding
-`offline_access` to scopes is insufficient when the authorization request omits
-`prompt=consent`. OIDC Core requires that consent signal for offline access
-unless the provider has another durable consent mechanism. The local patch now
-adds `prompt=consent` generically whenever the configured scopes contain
-`offline_access`, with handler-level regression coverage. This is not tied to
-the credentialless Cluster Inventory provider and should be proposed as a
-separate, small upstream change.
-
-It contains no Realmroot URL, claim, client ID, Gateway API, or product name.
-Local tests prove OIDC inheritance, absence of an exec credential, standard
-exec-provider compatibility, invalid configuration rejection, and existing
-Cluster Inventory behavior.
-
-## Upstream work
-
-1. Open a Headlamp issue describing current-user authentication as a distinct
-   credentialless AccessProvider mode.
-2. Submit the minimal generic patch and tests; do not include the local Helm
-   values or Gateway-specific provider name in the PR.
-3. Submit the offline-access consent fix separately so it can be reviewed and
-   released independently of Cluster Inventory.
-4. Ask SIG Multicluster whether a standard AccessProvider name/capability should
-   be documented in the Cluster Inventory API so dashboards can converge on
-   one well-known semantic instead of local names.
-5. After merge, pin the first released Headlamp version containing the change
-   and remove the local Headlamp patch.
-
-No upstream change is required for the Hub catalog or Realmroot Agent
-Resource Server; those are independent services and remain outside Headlamp.
+An upstream proposal should define a small provider interface first and use the Hub as one interoperable implementation. Names, interfaces, tests, and documentation must remain issuer- and product-neutral. Until accepted upstream, Headlamp clusters must be configured through official static/Helm configuration; the Hub and Kite integration do not depend on a local Headlamp patch.

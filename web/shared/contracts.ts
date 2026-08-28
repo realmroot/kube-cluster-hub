@@ -15,13 +15,8 @@ export const clusterSchema = z.object({
   description: z.string(),
   apiServerUrl: z.string(),
   prometheusUrl: z.string(),
-  accessMode: z.enum(['direct', 'connector']),
-  connectorId: z.string(),
-  connectorUrl: z.string(),
   enabled: z.boolean(),
   default: z.boolean(),
-  inventoryStatus: z.string(),
-  inventoryError: z.string(),
   resourceVersion: z.number().int(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -33,9 +28,6 @@ export type ClusterInput = Pick<
   | 'description'
   | 'apiServerUrl'
   | 'prometheusUrl'
-  | 'accessMode'
-  | 'connectorId'
-  | 'connectorUrl'
   | 'enabled'
   | 'default'
 >
@@ -58,8 +50,6 @@ export const auditEventSchema = z.object({
   status: z.number(),
   durationMillis: z.number(),
 })
-export type AuditEvent = z.infer<typeof auditEventSchema>
-
 export const pageSchema = <T extends z.ZodType>(item: T) =>
   z.object({
     items: z.array(item),

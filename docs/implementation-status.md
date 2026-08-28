@@ -1,62 +1,43 @@
-# Goal and implementation status
+# Implementation status
 
-Updated: 2026-08-28
+## Target
 
-## Goal
+Kube Cluster Hub is a stable, horizontally scalable cluster catalog and Kubernetes resource-server gateway. Its logical control plane and data plane ship together. It forwards Realmroot identities to Kubernetes, leaves resource authorization to Kubernetes RBAC, stores no cluster credential, and exposes the same catalog/proxy contract to Kite, other dashboards, and Realmroot Toolbox Agents.
 
-Provide one simple, protocol-oriented cluster directory and access boundary for
-Kite, other dashboards, and Realmroot Agents. The control plane must
-run from one TypeScript implementation on Workers/D1 or Node/Docker/SQLite; a
-small Go Connector must keep Kubernetes credentials and Agent execution inside
-each cluster. Kubernetes HTTP/OIDC/RBAC remain authoritative.
+## Implemented in this refactor
 
-## Delivered stages
-
-| Stage | Actual implementation |
+| Area | Result |
 | --- | --- |
-| Control-plane split | The previous Go monolith was removed. Hono domain/auth/dispatch/inventory code is shared by Worker and Node entry points; D1 and SQLite are adapters behind one store contract. |
-| Cluster data plane | A single-replica Go Connector verifies request-bound ES256 dispatch JWTs, forwards user ID tokens, uses a cluster-local projected ServiceAccount for Agent impersonation, reports status, and supports HTTP streaming and WebSockets. |
-| Catalog and migration | API version `2026-08-28` models `connector` and `direct` access. Existing SQLite catalog/audit data migrates in place; legacy public TLS records become direct mode, while legacy custom-CA records are disabled until a Connector is supplied. |
-| Resource Server | RFC 9728 discovery, OpenAPI, RFC 9068 claim checks, RFC 9449 DPoP/replay protection, RFC 8693 actor attribution, scopes, immutable audit, and Kubernetes-native status/errors are complete. |
-| Inventory | Enabled clusters reconcile to Cluster Inventory API v0.1.3 ClusterProfiles. Connector readiness/version are reflected without copying credentials into the profile. |
-| Built-in UI | React/Vite catalog and audit UI supports public PKCE login, loading/error/empty states, and Direct/Connector create/edit dialogs. |
-| Kite | Catalog calls use a resource-audience Access Token while Kubernetes calls use the same session's ID Token. Live Realmroot login, Overview resources/metrics, and audit passed through the public Worker and local Connector. |
-| Runtime targets | The Worker, D1 migrations, static UI, cron, and observability are deployed publicly. Node/SQLite and Connector container targets share the same control-plane domain and schema. |
-| kind/Toolbox | One Kubernetes v1.33.1 kind cluster verifies user UI reads, Agent discovery/read/write/denial/audit, Connector status, and ClusterProfile publication. Temporary CRUD resources are removed. |
+| Deployment shape | `control-plane/` and `data-plane/` are logical modules in the same Worker/Node artifact and scale together. |
+| Human access | Separate catalog access-token and Kubernetes ID-token verification; verified Kubernetes token is forwarded directly. |
+| Agent access | RFC 9728/OpenAPI discovery, authorized-client and scope enforcement, DPoP verification/replay persistence, Hub audience validation, direct token forwarding, Kubernetes-owned audience/RBAC validation, attributed audit. |
+| Catalog | Credential-free cluster resources with one required reachable API origin and optimistic concurrency. |
+| Proxy | Streaming HTTP for Worker/Node and native Node WebSocket upgrades; dangerous forwarding/impersonation headers stripped. |
+| Persistence | D1 on Worker, PostgreSQL for replicated Node/Docker, SQLite for local single-process development. |
+| UI | PKCE login with reload-safe tab session storage, cluster CRUD dialog, API endpoint/default/enabled metadata, audit list, loading/error/empty states. |
+| Migration | D1/SQLite migration removes Connector/status/inventory fields, preserves direct endpoints, and disables legacy Connector rows for review. |
+| Toolchain | TypeScript 7.0.2, Node 26 images/CI, Vite 8, Vitest 4, Biome 2, Wrangler 4, current React/Hono/Drizzle dependencies. |
+| Removed | Go Connector, dispatch JWT/key generator, ServiceAccount impersonation, status heartbeat, ClusterProfile publisher, system inventory credential, Go CI/release artifacts. |
 
-## Deliberate product boundaries
+## Deliberately not supported
 
-- The service does not model Pods, Deployments, CRDs, Helm releases, metrics,
-  search, logs, exec, or watch as proprietary resources. Those remain native
-  Kubernetes/dashboard functions.
-- Human tokens are never exchanged, rewritten, or mapped to Gateway roles.
-- Agent access tokens are never forwarded to kube-apiserver.
-- Agent access requires Connector mode. Direct mode is only a compatibility
-  path for human access to a publicly reachable Kubernetes API.
-- The catalog cannot store tokens, client certificates, kubeconfigs,
-  ServiceAccounts, users, group mappings, or Kubernetes roles.
-- Connector-mode catalog records also omit kube-apiserver URL, CA bundle, and
-  TLS name; the cluster-local Connector owns all three.
-- One Connector per cluster and one Node/SQLite replica are intentional. Use
-  Workers/D1 for horizontally distributed control-plane HTTP execution.
+- storing kubeconfig, bearer token, client certificate, CA bundle, or client secret;
+- a Hub-owned Kubernetes role model or per-user permission database;
+- automatic tunnel lifecycle or a Hub-specific cluster agent;
+- per-user/per-cluster informers or resource caches;
+- Agent loops, AI features, or product-specific toolbox behavior;
+- Cluster Inventory `ClusterProfile` publication from a privileged system credential.
 
-## Old architecture removal
+Prometheus URL discovery remains catalog metadata for dashboard metrics. Helm, metrics, search, and Kubernetes resource UX remain dashboard responsibilities rather than Hub business features.
 
-Deleted code includes the Go OIDC/Agent validators, monolithic HTTP server,
-proxy/informer publisher, configuration package, and SQLite store. The old
-`deploy/gateway.yaml` was replaced with separate control-plane and Connector
-manifests. Searches for the obsolete actor claims and embedded AI/Agent loop
-return no product code; Cloudflare generated ambient type declarations are not
-checked in.
+## Remaining external prerequisites
 
-The old control-plane process is stopped and no ClusterProfile or dashboard
-route points at it. Old namespace resources are removed after final regression;
-the requested kind cluster and new Connector remain for interactive review.
+These are deployment/integration configuration, not missing Hub modules:
 
-## External follow-up
+1. Realmroot must issue a Hub Resource Server token with Kubernetes-compatible identity/group claims.
+2. Every kube-apiserver exposed to Agents must trust the Realmroot issuer, accept the Hub resource audience (or another audience present in the token), and map claims consistently.
+3. Operators must supply network reachability from the Hub runtime to each API server that preserves streaming HTTP and WebSocket upgrades.
+4. Kite must use the catalog for cluster selection and the human proxy with its Realmroot Kubernetes ID token.
+5. Production Node deployments must provide shared PostgreSQL; Worker deployments must use migrated D1.
 
-- Replace the acceptance quick tunnel with a stable trusted HTTPS domain before
-  production deployment.
-- Configure production D1/SQLite backup, dispatch-key rotation, observability,
-  and retention operations. These are deployment operations, not missing
-  architecture paths.
+The acceptance record in [e2e-acceptance.md](e2e-acceptance.md) distinguishes automated repository verification from live Realmroot/kind/Kite verification and is updated only after each command is actually rerun.

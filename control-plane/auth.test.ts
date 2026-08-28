@@ -52,7 +52,7 @@ describe('OIDC and OAuth Agent authentication', () => {
     issuer = `http://127.0.0.1:${address.port}`
     database = new NodeDatabaseAdapter(':memory:')
     migrateNodeDatabase(database)
-    store = new Store(database)
+    store = new Store(database.orm)
   })
 
   afterEach(async () => {
@@ -125,6 +125,7 @@ describe('OIDC and OAuth Agent authentication', () => {
       controllerSubject: 'controller-1',
       actor: { issuer, subject: 'agent-1' },
       scopes: ['clusters:read', 'kubernetes:read'],
+      token: accessToken,
     })
     await expect(
       verifier.verify(`DPoP ${accessToken}`, proof, 'GET', target),

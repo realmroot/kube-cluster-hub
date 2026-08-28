@@ -1,9 +1,9 @@
 import type { Context, Next } from 'hono'
+import { ProxyError } from '../data-plane/proxy'
 import type { Variables } from './app-dependencies'
 import { AuthenticationError } from './auth'
 import type { Config } from './config'
 import { apiVersion } from './contracts'
-import { ProxyError } from './dispatch'
 import {
   type AgentPrincipal,
   ConflictError,
@@ -14,7 +14,7 @@ import {
 
 export type HubContext = Context<{ Variables: Variables }>
 
-export class AuthorizationError extends Error {}
+class AuthorizationError extends Error {}
 
 export function installHttpBoundary(
   app: import('./app-dependencies').HubApp,
@@ -143,28 +143,6 @@ export async function boundedJson(request: Request): Promise<unknown> {
   }
 }
 
-export async function constantTimeBearer(
-  authorization: string | undefined,
-  expected: string,
-): Promise<boolean> {
-  const parts = authorization?.trim().split(/\s+/) ?? []
-  const provided =
-    parts.length === 2 && parts[0]?.toLowerCase() === 'bearer'
-      ? parts[1] || ''
-      : ''
-  const encoder = new TextEncoder()
-  const [providedHash, expectedHash] = await Promise.all([
-    crypto.subtle.digest('SHA-256', encoder.encode(provided)),
-    crypto.subtle.digest('SHA-256', encoder.encode(expected)),
-  ])
-  const left = new Uint8Array(providedHash)
-  const right = new Uint8Array(expectedHash)
-  let difference = 0
-  for (let index = 0; index < left.length; index += 1)
-    difference |= (left[index] ?? 0) ^ (right[index] ?? 0)
-  return difference === 0
-}
-
 export function requiredRequestId(context: HubContext): string {
   const requestId = context.get('requestId')
   if (!requestId) throw new Error('request id middleware did not run')
@@ -183,7 +161,7 @@ export function openApi(context: Context, document: object): Response {
   })
 }
 
-export function problem(
+function problem(
   context: Context,
   status: 400 | 401 | 403 | 404 | 412 | 500 | 502 | 503,
   type: string,

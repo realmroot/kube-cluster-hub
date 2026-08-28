@@ -69,7 +69,6 @@ export function ClustersPage({ api }: { api: HubApi }) {
               <tr>
                 <th>Cluster</th>
                 <th>Connection</th>
-                <th>Inventory</th>
                 <th>Status</th>
                 <th>Updated</th>
                 <th>
@@ -101,25 +100,9 @@ export function ClustersPage({ api }: { api: HubApi }) {
                   <td>
                     <span className="cell-main">
                       <Cable size={15} />
-                      {cluster.accessMode === 'connector'
-                        ? 'Connector'
-                        : 'Direct'}
+                      Kubernetes API
                     </span>
-                    <small className="truncate">
-                      {cluster.connectorUrl || cluster.apiServerUrl}
-                    </small>
-                  </td>
-                  <td>
-                    <span
-                      className={`badge ${cluster.inventoryStatus === 'ready' ? 'success' : 'neutral'}`}
-                    >
-                      {cluster.inventoryStatus}
-                    </span>
-                    {cluster.inventoryError && (
-                      <small className="danger-text">
-                        {cluster.inventoryError}
-                      </small>
-                    )}
+                    <small className="truncate">{cluster.apiServerUrl}</small>
                   </td>
                   <td>
                     {cluster.enabled ? (
@@ -251,8 +234,8 @@ function EmptyState({ add }: { add(): void }) {
       <Server size={30} />
       <h2>No clusters yet</h2>
       <p>
-        Add a direct endpoint or connect a private cluster through the optional
-        Connector.
+        Add a Kubernetes API endpoint reachable through your public or private
+        network.
       </p>
       <button type="button" className="button primary" onClick={add}>
         <Plus size={17} />

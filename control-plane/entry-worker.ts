@@ -14,7 +14,7 @@ function identityFor(
   ctx: ExecutionContext,
 ): Promise<IdentityRuntime> {
   const config = loadConfig(env)
-  const fingerprint = `${config.oidcIssuer}\u0000${config.resourceIssuer}\u0000${config.dispatchPrivateJwk.kid}`
+  const fingerprint = `${config.oidcIssuer}\u0000${config.resourceIssuer}\u0000${config.oidcAudience}`
   if (!identityCache || identityCache.fingerprint !== fingerprint) {
     const promise = prepareIdentity(config)
     identityCache = { fingerprint, promise }
@@ -76,7 +76,6 @@ export default {
       (input, init) => fetch(input, init),
       identity,
     )
-    await runtime.inventory.reconcile()
     await runtime.store.pruneAudit(
       new Date(Date.now() - runtime.config.auditRetentionMs),
     )

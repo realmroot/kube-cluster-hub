@@ -1,13 +1,16 @@
 import { sql } from 'drizzle-orm'
 import {
+  boolean,
   index,
   integer,
-  sqliteTable,
+  pgTable,
+  primaryKey,
+  serial,
   text,
   uniqueIndex,
-} from 'drizzle-orm/sqlite-core'
+} from 'drizzle-orm/pg-core'
 
-export const clusters = sqliteTable(
+export const pgClusters = pgTable(
   'clusters',
   {
     id: text('id').primaryKey(),
@@ -15,10 +18,8 @@ export const clusters = sqliteTable(
     description: text('description').notNull().default(''),
     apiServerUrl: text('api_server_url').notNull(),
     prometheusUrl: text('prometheus_url').notNull().default(''),
-    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
-    default: integer('is_default', { mode: 'boolean' })
-      .notNull()
-      .default(false),
+    enabled: boolean('enabled').notNull().default(true),
+    default: boolean('is_default').notNull().default(false),
     resourceVersion: integer('resource_version').notNull().default(1),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
@@ -26,11 +27,11 @@ export const clusters = sqliteTable(
   (table) => [
     uniqueIndex('clusters_one_default')
       .on(table.default)
-      .where(sql`${table.default} = 1`),
+      .where(sql`${table.default} = true`),
   ],
 )
 
-export const dpopProofs = sqliteTable(
+export const pgDpopProofs = pgTable(
   'dpop_proofs',
   {
     keyThumbprint: text('key_thumbprint').notNull(),
@@ -39,21 +40,19 @@ export const dpopProofs = sqliteTable(
     createdAt: text('created_at').notNull(),
   },
   (table) => [
-    uniqueIndex('dpop_proofs_identity').on(table.keyThumbprint, table.jti),
+    primaryKey({ columns: [table.keyThumbprint, table.jti] }),
     index('dpop_proofs_expiry').on(table.expiresAt),
   ],
 )
 
-export const auditEvents = sqliteTable(
+export const pgAuditEvents = pgTable(
   'audit_events',
   {
-    id: integer('id').primaryKey({ autoIncrement: true }),
+    id: serial('id').primaryKey(),
     createdAt: text('created_at').notNull(),
     requestId: text('request_id').notNull(),
     tokenId: text('token_id').notNull().default(''),
-    principalType: text('principal_type', {
-      enum: ['user', 'agent'],
-    }).notNull(),
+    principalType: text('principal_type').notNull(),
     controllerSubject: text('controller_subject').notNull().default(''),
     agentIssuer: text('agent_issuer').notNull().default(''),
     agentSubject: text('agent_subject').notNull().default(''),
@@ -71,9 +70,3 @@ export const auditEvents = sqliteTable(
     index('audit_events_request').on(table.requestId),
   ],
 )
-
-export const schema = {
-  clusters,
-  dpopProofs,
-  auditEvents,
-}

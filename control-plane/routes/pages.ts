@@ -1,10 +1,10 @@
 import { ValidationError } from '../domain'
 import type { HubContext } from '../http'
-import type { Store } from '../store'
+import type { HubStore } from '../store'
 
 export async function clusterPage(
   context: HubContext,
-  store: Store,
+  store: HubStore,
   canonicalUrl: string,
 ): Promise<Response> {
   const pageSize = pageSizeFrom(context)
@@ -25,7 +25,7 @@ export async function clusterPage(
 
 export async function auditPage(
   context: HubContext,
-  store: Store,
+  store: HubStore,
   canonicalUrl: string,
 ): Promise<Response> {
   const pageSize = pageSizeFrom(context)

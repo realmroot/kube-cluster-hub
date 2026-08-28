@@ -1,114 +1,70 @@
 # Architecture
 
-## Design outcome
+## Decision
 
-The system has a durable control plane and a deliberately small per-cluster
-data plane:
+The Hub has a logical control plane and data plane but one deployment unit. Every Worker isolate or Node replica can serve catalog requests and proxy Kubernetes traffic. This keeps the protocol and operations small while allowing ordinary horizontal scaling behind one hostname.
 
 ```text
-                         +-------------------------------+
-Browser UI / Kite ------->| TypeScript Control Plane      |
-Realmroot Toolbox ------>| catalog, auth, audit, dispatch|
-                         | Worker+D1 or Node+SQLite       |
-                         +---------------+---------------+
-                                         | HTTPS + 30 s signed request
-                                         v
-                         +-------------------------------+
-                         | Go Connector (one per cluster)|
-                         | token passthrough / Agent SA  |
-                         +---------------+---------------+
-                                         | Kubernetes HTTP API
-                                         v
-                                  kube-apiserver + RBAC
+                         one stateless deployment unit
+                      ┌─────────────────────────────────┐
+Realmroot OIDC ───────┤ authentication / authorization  │
+Kite / browser ───────┤ cluster catalog                 ├── reachable kube-apiserver
+Realmroot Toolbox ────┤ Agent resource server + audit   │
+                      ┤ streaming Kubernetes proxy      │
+                      └──────────────┬──────────────────┘
+                                     │
+                              D1 or PostgreSQL
 ```
 
-There is no control-plane kubeconfig and no long-lived cluster token in the
-catalog. Each cluster keeps its own ServiceAccount token inside Kubernetes.
-
-## Identity paths
-
-### Human user
-
-1. The Hub UI or Kite signs the user in with a standard public OIDC client and
-   PKCE. The catalog request includes an RFC 8707 resource indicator.
-2. The dashboard uses the Access Token for catalog APIs and the ID Token for
-   Kubernetes APIs. Kite keeps both in its encrypted server-side session.
-3. The control plane validates the Kubernetes ID Token's issuer, audience,
-   lifetime, and signature, then
-   binds the token hash to a short-lived dispatch JWT.
-4. The Connector verifies the dispatch JWT and forwards the original ID token
-   unchanged to kube-apiserver.
-5. kube-apiserver derives username/groups and performs native RBAC.
-
-The control plane neither maps groups nor grants Kubernetes permissions.
-
-### Agent
-
-1. Realmroot Toolbox calls the Resource Server with an RFC 9068 access token,
-   RFC 9449 DPoP proof, and RFC 8693 `act` actor identity.
-2. The control plane verifies the token, proof, authorized OAuth client, and
-   route scope (`kubernetes:read` or `kubernetes:write`).
-3. It sends only verified actor/controller fields in a signed dispatch JWT; the
-   external Agent token is never forwarded to the cluster.
-4. The Connector uses its ServiceAccount and Kubernetes impersonation. The
-   username is fixed (`kube-cluster-hub:agent`); verified identities are recorded
-   as impersonation extras and in Hub audit records.
-5. Kubernetes RBAC remains the final authorization decision.
-
-OAuth scopes are an admission ceiling. They do not replace Kubernetes RBAC.
+`control-plane/` owns identity verification, catalog resources, OpenAPI/discovery, audit, and persistence. `data-plane/` owns target construction, request sanitization, token forwarding, and HTTP error translation. Node's native Upgrade handler follows the same rules for exec, attach, and port-forward WebSockets.
 
 ## Cluster catalog
 
-A cluster record contains only connection and presentation metadata:
+A cluster contains only:
 
-| Field | Purpose |
+| Field | Meaning |
 | --- | --- |
-| `id` | Stable DNS-label identifier; also the Connector ID |
-| `displayName`, `description` | UI presentation |
-| `accessMode` | `connector` or `direct` |
-| `connectorUrl` | Trusted HTTPS Connector endpoint; loopback HTTP is development-only |
-| `apiServerUrl` | Direct-mode Kubernetes API URL; empty in Connector mode |
-| `prometheusUrl` | Optional metrics endpoint metadata |
-| `enabled`, `default` | Availability and UI selection |
+| `id` | immutable DNS-label path identifier |
+| `displayName` | human-facing name |
+| `description` | optional catalog metadata |
+| `apiServerUrl` | trusted, reachable Kubernetes API origin |
+| `prometheusUrl` | optional dashboard discovery hint |
+| `enabled` | proxy availability switch |
+| `default` | catalog default marker |
+| `resourceVersion` | optimistic concurrency version |
+| timestamps | creation and last replacement time |
 
-Connector mode is the production default and the only Agent execution mode.
-Direct mode exists for a publicly reachable kube-apiserver and human token
-passthrough; Workers cannot use private CA bundles or custom TLS server names.
-The catalog never stores those TLS trust values. In Connector mode, the
-Connector obtains API-server trust from its local Kubernetes configuration.
+It contains no credentials, per-user permissions, TLS material, connection mode, or deployment-specific tunnel information. A tunnel is just one way to make `apiServerUrl` reachable.
 
-## Deployment profiles
+## Human request flow
 
-| Capability | Worker + D1 | Node/Docker + SQLite |
-| --- | --- | --- |
-| Catalog, auth, audit, dispatch | Yes | Yes |
-| Human and Agent HTTP proxy | Yes | Yes |
-| watch/log streaming | Yes | Yes |
-| WebSocket exec/attach/port-forward | Worker WebSocket response | Native HTTP Upgrade bridge |
-| Direct-mode custom CA/TLS name | No | No |
-| ClusterProfile publication | Via configured inventory cluster | Via configured inventory cluster |
+1. The browser performs Authorization Code + PKCE against Realmroot.
+2. Catalog calls use a catalog-audience access token. Admin groups control catalog mutation only.
+3. Kubernetes calls use the Kubernetes-audience ID token.
+4. The Hub verifies issuer, audience, signature, expiry, and token type; resolves an enabled catalog cluster; sanitizes headers; and forwards that ID token.
+5. kube-apiserver derives the username/groups from the token and applies Kubernetes RBAC.
 
-The two runtimes share the Hono route modules, domain validation, auth,
-dispatch, inventory, and Drizzle schema/store. Only runtime startup and the
-D1/SQLite database adapters differ.
+The Hub does not maintain a second Kubernetes authorization decision.
 
-## Scale and failure boundaries
+## Agent request flow
 
-- No informer is created per user or per cluster. Requests are streamed on
-  demand; idle clusters consume catalog rows, not resident watches.
-- A Connector has one replica by design so its in-memory dispatch replay cache
-  has a single authority. It is restarted by Kubernetes on failure.
-- A cluster failure is isolated to that Connector. Catalog, audit, and other
-  clusters continue operating.
-- Connector status authentication can update health only; it cannot authorize
-  proxy calls. Proxy authority requires a valid request-bound dispatch JWT.
-- The control plane can rotate dispatch keys by changing the JWK `kid` and
-  rolling Connectors before retiring the previous key.
+1. Realmroot Toolbox discovers RFC 9728 metadata and the Hub OpenAPI document.
+2. Realmroot issues a DPoP-bound access token for the Agent/controller/client and approved scopes.
+3. The token is audience-bound to the Hub Resource Server. The Hub validates that audience, DPoP binding, replay, actor/controller identity, client allow-list, and the route scope.
+4. The same signed access token is forwarded to kube-apiserver. Kubernetes independently validates an audience configured for that cluster and authorizes its standard identity/group claims through RBAC. The Hub never treats its own audience check as proof that Kubernetes will accept the token.
+5. The Hub records controller, Agent actor, client, token ID, scope, cluster, route, status, and duration.
 
-## Dashboard integrations
+Hub scopes are a resource-server boundary, not a replacement for Kubernetes RBAC. A request must pass both layers.
 
-Kite consumes the catalog API directly for add/edit/delete and uses the native
-Kubernetes proxy paths for all operations. Other dashboards can discover
-enabled clusters from SIG Multicluster Cluster Inventory `ClusterProfile`
-resources. No dashboard-specific credential is placed in a catalog row or
-ClusterProfile.
+## Scaling and state
+
+- Worker: Cloudflare scales isolates; D1 stores shared catalog, replay, and audit state.
+- Node/Docker: replicas are stateless when `HUB_DATABASE_URL` points to PostgreSQL. Any replica can handle any request or WebSocket.
+- SQLite (`HUB_DATABASE_DSN`) is deliberately local development mode and must not be used by multiple replicas.
+- No in-memory informer or per-user/per-cluster cache is required. Memory therefore does not grow with the user × cluster product.
+
+API-server networking and load balancing are external concerns. Standard private networking, Cloudflare Tunnel, Connect, VPNs, or managed Kubernetes endpoints all work without a Hub-specific component.
+
+## Removed architecture
+
+The retired Connector, ServiceAccount impersonation, dispatch JWT, Connector heartbeat, ClusterProfile publisher, and system inventory credential are removed. They created another trust protocol and another availability boundary without being necessary when the Hub can reach the API server and forward the Realmroot credential directly.

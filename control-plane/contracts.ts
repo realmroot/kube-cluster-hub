@@ -47,7 +47,7 @@ const cluster = {
   required: [
     'id',
     'displayName',
-    'accessMode',
+    'apiServerUrl',
     'enabled',
     'default',
     'resourceVersion',
@@ -59,16 +59,11 @@ const cluster = {
     apiServerUrl: {
       type: 'string',
       format: 'uri',
-      description: 'Required only in direct access mode',
+      description: 'Kubernetes API endpoint reachable by the Hub runtime',
     },
     prometheusUrl: { type: 'string', format: 'uri' },
-    accessMode: { type: 'string', enum: ['direct', 'connector'] },
-    connectorId: { type: 'string' },
-    connectorUrl: { type: 'string', format: 'uri' },
     enabled: { type: 'boolean' },
     default: { type: 'boolean' },
-    inventoryStatus: { type: 'string' },
-    inventoryError: { type: 'string' },
     resourceVersion: { type: 'integer', minimum: 1 },
     createdAt: { type: 'string', format: 'date-time' },
     updatedAt: { type: 'string', format: 'date-time' },
@@ -78,15 +73,12 @@ const cluster = {
 const clusterInput = {
   type: 'object',
   additionalProperties: false,
-  required: ['displayName', 'accessMode', 'enabled', 'default'],
+  required: ['displayName', 'apiServerUrl', 'enabled', 'default'],
   properties: {
     displayName: { type: 'string', minLength: 1 },
     description: { type: 'string' },
     apiServerUrl: { type: 'string', format: 'uri' },
     prometheusUrl: { type: 'string', format: 'uri' },
-    accessMode: { type: 'string', enum: ['direct', 'connector'] },
-    connectorId: { type: 'string' },
-    connectorUrl: { type: 'string', format: 'uri' },
     enabled: { type: 'boolean' },
     default: { type: 'boolean' },
   },
@@ -122,30 +114,6 @@ const auditEvent = {
     path: { type: 'string' },
     status: { type: 'integer', minimum: 100, maximum: 599 },
     durationMillis: { type: 'integer', minimum: 0 },
-  },
-}
-
-const connectorStatus = {
-  type: 'object',
-  required: [
-    'connectorId',
-    'clusterId',
-    'version',
-    'kubernetesVersion',
-    'capabilities',
-    'state',
-    'lastError',
-    'observedAt',
-  ],
-  properties: {
-    connectorId: { type: 'string' },
-    clusterId: { type: 'string' },
-    version: { type: 'string' },
-    kubernetesVersion: { type: 'string' },
-    capabilities: { type: 'array', items: { type: 'string' } },
-    state: { type: 'string', enum: ['ready', 'degraded'] },
-    lastError: { type: 'string' },
-    observedAt: { type: 'string', format: 'date-time' },
   },
 }
 
@@ -190,7 +158,6 @@ export function catalogOpenApi(config: Config): object {
         Cluster: cluster,
         ClusterInput: clusterInput,
         AuditEvent: auditEvent,
-        ConnectorStatus: connectorStatus,
         Problem: problem,
       },
     },
@@ -252,23 +219,6 @@ export function catalogOpenApi(config: Config): object {
           scopes.auditRead,
         ),
       },
-      '/connector-statuses/{connectorId}': {
-        parameters: [
-          {
-            name: 'connectorId',
-            in: 'path',
-            required: true,
-            schema: { type: 'string' },
-          },
-        ],
-        get: operation(
-          'getConnectorStatus',
-          'Get the latest Connector status',
-          [parameter('apiVersion')],
-          false,
-          scopes.clustersRead,
-        ),
-      },
     },
   }
 }
@@ -281,7 +231,7 @@ export function agentOpenApi(config: Config): object {
       title: 'Kube Cluster Hub Agent API',
       version: apiVersion,
       description:
-        'Discover clusters and invoke the canonical Kubernetes HTTP API with OAuth Agent authority.',
+        'Discover clusters and invoke the canonical Kubernetes HTTP API with a DPoP-bound Realmroot Resource Server token. The original token is forwarded and Kubernetes independently validates its accepted audience and RBAC.',
     },
     servers: [{ url: config.resourceUrl }],
     components: {
@@ -404,6 +354,7 @@ function kubernetesOperation(
     operationId,
     summary: 'Invoke the Kubernetes API',
     security: [{ oauth: [scope] }],
+    parameters: kubernetesQueryParameters(),
     ...(body
       ? {
           requestBody: {
@@ -422,4 +373,47 @@ function kubernetesOperation(
       default: { description: 'Kubernetes response or gateway problem' },
     },
   }
+}
+
+function kubernetesQueryParameters(): object[] {
+  const query = (name: string, schema: object) => ({
+    name,
+    in: 'query',
+    required: false,
+    schema,
+  })
+  return [
+    query('labelSelector', { type: 'string' }),
+    query('fieldSelector', { type: 'string' }),
+    query('limit', { type: 'integer', minimum: 1 }),
+    query('continue', { type: 'string' }),
+    query('resourceVersion', { type: 'string' }),
+    query('resourceVersionMatch', {
+      type: 'string',
+      enum: ['Exact', 'NotOlderThan'],
+    }),
+    query('watch', { type: 'boolean' }),
+    query('allowWatchBookmarks', { type: 'boolean' }),
+    query('sendInitialEvents', { type: 'boolean' }),
+    query('timeoutSeconds', { type: 'integer', minimum: 1 }),
+    query('container', { type: 'string' }),
+    query('follow', { type: 'boolean' }),
+    query('previous', { type: 'boolean' }),
+    query('sinceSeconds', { type: 'integer', minimum: 1 }),
+    query('tailLines', { type: 'integer', minimum: 0 }),
+    query('timestamps', { type: 'boolean' }),
+    query('pretty', { type: 'string' }),
+    query('dryRun', { type: 'string' }),
+    query('fieldManager', { type: 'string' }),
+    query('fieldValidation', {
+      type: 'string',
+      enum: ['Ignore', 'Warn', 'Strict'],
+    }),
+    query('force', { type: 'boolean' }),
+    query('gracePeriodSeconds', { type: 'integer', minimum: 0 }),
+    query('propagationPolicy', {
+      type: 'string',
+      enum: ['Orphan', 'Background', 'Foreground'],
+    }),
+  ]
 }

@@ -1,6 +1,10 @@
+import {
+  ProxyError,
+  proxyAgentRequest,
+  proxyUserRequest,
+} from '../../data-plane/proxy'
 import type { AppDependencies, HubApp } from '../app-dependencies'
 import { kubernetesScope, scopes } from '../contracts'
-import { ProxyError, proxyAgentRequest, proxyUserRequest } from '../dispatch'
 import type { AgentPrincipal, UserPrincipal } from '../domain'
 import {
   auditStatus,
@@ -9,7 +13,7 @@ import {
   requiredClusterId,
   requiredRequestId,
 } from '../http'
-import type { Store } from '../store'
+import type { HubStore } from '../store'
 import { auditPage, clusterPage } from './pages'
 
 export function registerAccessRoutes(
@@ -150,7 +154,7 @@ async function verifyAgent(
   )
 }
 
-async function enabledCluster(store: Store, id: string) {
+async function enabledCluster(store: HubStore, id: string) {
   const cluster = await store.getCluster(id)
   if (!cluster.enabled) throw new ProxyError('cluster is disabled', 503)
   return cluster

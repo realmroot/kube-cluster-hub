@@ -15,15 +15,10 @@ describe('ClustersPage', () => {
             id: 'local-kind',
             displayName: 'Local kind',
             description: '',
-            apiServerUrl: '',
+            apiServerUrl: 'https://kubernetes.example.test',
             prometheusUrl: '',
-            accessMode: 'connector',
-            connectorId: 'local-kind',
-            connectorUrl: 'https://connector.example.test',
             enabled: true,
             default: true,
-            inventoryStatus: 'ready',
-            inventoryError: '',
             resourceVersion: 1,
             createdAt: '2026-08-28T00:00:00.000Z',
             updatedAt: '2026-08-28T00:00:00.000Z',
@@ -42,7 +37,10 @@ describe('ClustersPage', () => {
       </QueryClientProvider>,
     )
     expect(await screen.findByText('Local kind')).toBeInTheDocument()
-    expect(screen.getAllByText('Connector').length).toBeGreaterThan(0)
+    expect(screen.getByText('Kubernetes API')).toBeInTheDocument()
+    expect(
+      screen.getByText('https://kubernetes.example.test'),
+    ).toBeInTheDocument()
     expect(screen.getByText('Enabled')).toBeInTheDocument()
   })
 })

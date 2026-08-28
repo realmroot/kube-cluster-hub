@@ -1,20 +1,19 @@
 import { and, asc, desc, eq, gt, lt, ne, sql } from 'drizzle-orm'
-import type { DatabaseAdapter, HubDatabase } from './database'
+import type { HubDatabase } from './database'
 import {
   type AuditEvent,
   type Cluster,
   type ClusterInput,
   ConflictError,
-  type ConnectorStatus,
   NotFoundError,
 } from './domain'
-import { auditEvents, clusters, connectorStatuses, dpopProofs } from './schema'
+import { auditEvents, clusters, dpopProofs } from './schema'
 
-export class Store {
+export class Store implements HubStore {
   private readonly database: HubDatabase
 
-  constructor(database: HubDatabase | DatabaseAdapter) {
-    this.database = 'orm' in database ? database.orm : database
+  constructor(database: HubDatabase) {
+    this.database = database
   }
 
   async listClusters(after: string, limit: number): Promise<Cluster[]> {
@@ -39,8 +38,6 @@ export class Store {
     const record = {
       id,
       ...input,
-      inventoryStatus: 'pending',
-      inventoryError: '',
       resourceVersion: 1,
       createdAt: now,
       updatedAt: now,
@@ -72,8 +69,6 @@ export class Store {
       .update(clusters)
       .set({
         ...input,
-        inventoryStatus: 'pending',
-        inventoryError: '',
         resourceVersion: sql`${clusters.resourceVersion} + 1`,
         updatedAt: new Date().toISOString(),
       })
@@ -104,19 +99,6 @@ export class Store {
       )
       .returning({ id: clusters.id })
     if (rows.length !== 1) await this.throwMissingOrConflict(id)
-  }
-
-  async setInventoryPublication(
-    id: string,
-    status: string,
-    error: string,
-  ): Promise<void> {
-    const rows = await this.database
-      .update(clusters)
-      .set({ inventoryStatus: status, inventoryError: error })
-      .where(eq(clusters.id, id))
-      .returning({ id: clusters.id })
-    if (rows.length !== 1) throw new NotFoundError('cluster not found')
   }
 
   async consumeDpopProof(
@@ -176,25 +158,6 @@ export class Store {
     return rows.length
   }
 
-  async putConnectorStatus(status: ConnectorStatus): Promise<void> {
-    const record = { ...status, capabilities: [...status.capabilities] }
-    await this.database
-      .insert(connectorStatuses)
-      .values(record)
-      .onConflictDoUpdate({
-        target: connectorStatuses.connectorId,
-        set: record,
-      })
-  }
-
-  async getConnectorStatus(id: string): Promise<ConnectorStatus> {
-    const row = await this.database.query.connectorStatuses.findFirst({
-      where: eq(connectorStatuses.connectorId, id),
-    })
-    if (!row) throw new NotFoundError('connector status not found')
-    return row
-  }
-
   private async exists(id: string): Promise<boolean> {
     return !!(await this.database.query.clusters.findFirst({
       where: eq(clusters.id, id),
@@ -206,4 +169,27 @@ export class Store {
     if (!(await this.exists(id))) throw new NotFoundError('cluster not found')
     throw new ConflictError('cluster resource version does not match')
   }
+}
+
+export interface HubStore {
+  listClusters(after: string, limit: number): Promise<Cluster[]>
+  getCluster(id: string): Promise<Cluster>
+  createCluster(id: string, input: ClusterInput): Promise<Cluster>
+  replaceCluster(
+    id: string,
+    input: ClusterInput,
+    expectedVersion: number,
+  ): Promise<Cluster>
+  deleteCluster(id: string, expectedVersion: number): Promise<void>
+  consumeDpopProof(
+    thumbprint: string,
+    jti: string,
+    expiresAt: Date,
+  ): Promise<void>
+  appendAudit(event: Omit<AuditEvent, 'id' | 'createdAt'>): Promise<void>
+  listAuditEvents(
+    beforeId: number | undefined,
+    limit: number,
+  ): Promise<AuditEvent[]>
+  pruneAudit(before: Date): Promise<number>
 }

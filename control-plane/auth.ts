@@ -10,7 +10,7 @@ import {
 } from 'jose'
 import type { AgentPrincipal, UserPrincipal } from './domain'
 import { ConflictError } from './domain'
-import type { Store } from './store'
+import type { HubStore } from './store'
 
 const proofLifetimeSeconds = 300
 
@@ -126,7 +126,7 @@ export class AgentVerifier {
     private readonly resource: string,
     private readonly authorizedClients: ReadonlySet<string>,
     private readonly algorithms: readonly string[],
-    private readonly store: Store,
+    private readonly store: HubStore,
   ) {}
 
   async verify(
@@ -213,6 +213,7 @@ export class AgentVerifier {
       scopes,
       scope: payload.scope || '',
       tokenId: payload.jti,
+      token,
     }
   }
 }
