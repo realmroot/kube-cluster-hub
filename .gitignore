@@ -1,5 +1,11 @@
 .env
+.dev.vars
 cluster-access-gateway
-gateway.db
+cluster-access-connector
+*.db
 *.db-shm
 *.db-wal
+node_modules/
+dist-control-plane/
+dist-worker/
+.wrangler/

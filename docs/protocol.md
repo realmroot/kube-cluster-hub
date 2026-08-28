@@ -1,61 +1,115 @@
-# Protocol and configuration
+# Protocol and security boundaries
 
-## Cluster catalog
+## Public APIs
 
-Every `/api/catalog` request carries `API-Version: 2026-08-27` and a standard
-OIDC Bearer ID token. Reads require a valid token. Writes and audit reads also
-require membership in one of `CATALOG_ADMIN_GROUPS`.
+Every catalog request carries `API-Version: 2026-08-28` and a standard OIDC
+Bearer ID token. Reads require a valid user. Mutations, audit reads, and
+Connector-status reads also require a group in `CATALOG_ADMIN_GROUPS`.
 
 | Method and URI | Meaning |
 | --- | --- |
 | `GET /api/catalog/clusters` | Cursor-paginated cluster collection |
-| `GET /api/catalog/clusters/{id}` | One cluster and its publication status |
-| `PUT /api/catalog/clusters/{id}` | Create with `If-None-Match: *`, or replace with `If-Match` |
+| `GET /api/catalog/clusters/{id}` | One cluster and current Connector/publication state |
+| `PUT /api/catalog/clusters/{id}` | Create with `If-None-Match: *`, replace with `If-Match` |
 | `DELETE /api/catalog/clusters/{id}` | Delete with `If-Match` |
-| `GET /api/catalog/audit-events` | Immutable, cursor-paginated user and Agent access audit |
+| `GET /api/catalog/audit-events` | Immutable, cursor-paginated access audit |
+| `GET /api/catalog/connector-statuses/{id}` | Current Connector heartbeat |
+| `PUT /api/connector-statuses/{id}` | Connector-only heartbeat update |
+| `ANY /clusters/{id}/kubernetes/*` | Current-user Kubernetes API passthrough |
 
-Cluster IDs are stable DNS labels. A record stores display name, description,
-API server URL, CA bundle, optional TLS server name and Prometheus URL,
-enabled/default flags, resource version, timestamps, and ClusterProfile
-publication status. It cannot store tokens, client certificates, kubeconfigs,
-users, or authorization roles.
-
-## Human Kubernetes proxy
-
-`/clusters/{id}/kubernetes/*` preserves method, query, body, upgrade/streaming
-behavior, and the signed-in user's Bearer ID token. It removes cookies, DPoP,
-and all caller-supplied impersonation headers. kube-apiserver must trust the
-same issuer and client ID and maps the token's standard claims to native users
-and groups.
+Collections use opaque cursor pagination and RFC 8288 `Link` headers. Errors
+use `application/problem+json`. Cluster writes reject credential-shaped fields,
+unknown fields, URL userinfo, unstable Connector IDs, and invalid mode-specific
+configuration.
 
 ## Agent Resource Server
 
-The protected resource is exactly `RESOURCE_SERVER_URL`. It publishes:
+The exact `RESOURCE_SERVER_URL` publishes:
 
-- `/.well-known/oauth-protected-resource{resource-path}`;
-- a `service-desc` link and `/openapi/agent.json`;
-- cluster discovery, immutable audit reads, and the canonical Kubernetes API.
+- RFC 9728 metadata at
+  `/.well-known/oauth-protected-resource/{resource-path}`;
+- an OpenAPI service description at `/openapi/agent.json`;
+- `GET /api/agent/clusters` and `GET /api/agent/audit-events`;
+- `ANY /api/agent/clusters/{id}/kubernetes/*`.
 
-Tokens must be audience-bound to the exact resource, issued by
-`RESOURCE_SERVER_ISSUER`, presented by an authorized client, contain an `act`
-actor, carry the required scope, and be bound to a fresh ES256 DPoP proof.
-`clusters:read`, `audit-events:read`, `kubernetes:read`, and `kubernetes:write`
-are admission scopes. Native Kubernetes RBAC is still authoritative.
+The control plane validates the access-token issuer, exact resource audience,
+authorized OAuth client, lifetime, signature, scopes, and RFC 8693 `act`
+identity. Each request also requires a fresh ES256 RFC 9449 DPoP proof. The DPoP
+`htu` comparison follows RFC 9449 and excludes query and fragment; the internal
+dispatch JWT separately binds the complete Kubernetes path and query.
 
-OpenAPI advertises common Kubernetes query parameters for selectors, watch
-streaming, resource versions, timeouts, and pod-log streaming. Unmodeled
-Kubernetes paths still pass through unchanged.
+| Scope | Admission ceiling |
+| --- | --- |
+| `clusters:read` | List enabled clusters |
+| `audit-events:read` | Read immutable audit records |
+| `kubernetes:read` | Kubernetes reads, watch, and logs |
+| `kubernetes:write` | Mutations, exec, attach, and port-forward |
 
-## Runtime configuration
+Kubernetes RBAC is still authoritative. A valid write scope can still receive
+a native Kubernetes 403.
 
-The complete example is `.env.example`. Required groups are:
+## Control Plane to Connector
 
-- service/public URLs and database DSN;
-- human OIDC issuer, Kubernetes audience, groups claim, and catalog-admin groups;
-- Agent Resource Server URL, issuer, authorized clients, and JWT algorithms;
-- cluster-local Agent read/write group names.
+The transport is normal HTTP semantics over trusted HTTPS. The control plane
+forwards method, path, query, headers, body, response status, trailers, and
+streaming behavior. It adds:
 
-`AUDIT_RETENTION` defaults to 90 days. Expired records are pruned daily and
-unfinished records from a terminated process are finalized as client-closed on
-the next start. SQLite is intentionally single-replica; a future HA release
-should introduce an external transactional store before replicas are increased.
+- `Authorization: Dispatch <JWT>`;
+- `X-Cluster-Authorization: Bearer <ID token>` for the human path only.
+
+The ES256 dispatch JWT expires after 30 seconds and binds:
+
+- issuer, audience, `kid`, `iat`, `exp`, and unique `jti`;
+- Connector/cluster ID;
+- HTTP method and full path/query;
+- SHA-256 body hash;
+- either the human token hash or the verified Agent attribution and requested
+  Kubernetes scope.
+
+The Connector verifies every binding, rejects a replayed `jti`, strips cookies,
+DPoP, and caller impersonation headers, and never accepts an external Agent
+token. Its status token can only write the matching heartbeat resource; it is
+not valid for dispatch or Kubernetes access.
+
+## Kubernetes execution
+
+For humans, the Connector sends the original ID token as `Bearer` and
+kube-apiserver performs OIDC authentication and group-to-RBAC authorization.
+
+For Agents, the Connector authenticates with its projected cluster-local
+ServiceAccount token and sends controlled impersonation headers:
+
+- username: `cluster-access:agent`;
+- group: `cluster-access:agents:read` or `cluster-access:agents:write`;
+- extras: verified actor issuer/subject and controller subject.
+
+The ServiceAccount is granted only the `impersonate` verbs in
+`deploy/connector.yaml`; namespace RoleBindings decide what those impersonated
+groups can actually do. It is not bound to cluster-admin.
+
+## Streaming
+
+- HTTP response bodies are streamed without buffering, including watch and
+  follow-log responses.
+- Node/Docker bridges native HTTP Upgrade for Kubernetes WebSocket operations.
+- Workers return the upstream WebSocket response directly.
+- Client cancellation is recorded as audit status 499.
+
+## Configuration and secrets
+
+`.env.example` is the complete development schema. Runtime secrets are supplied
+as environment variables or platform secrets:
+
+- `DISPATCH_SIGNING_PRIVATE_JWK` exists only in the control plane;
+- `DISPATCH_SIGNING_PUBLIC_JWKS` exists in Connectors and may contain the
+  current and next public keys during rotation;
+- the Connector ServiceAccount token is Kubernetes-projected and never copied
+  to the control plane;
+- `CONNECTOR_STATUS_TOKEN` authorizes only heartbeat writes.
+
+No generated secret file, launcher, kubeconfig, or dashboard client secret is
+required. The dashboards use one public Authorization Code + PKCE OIDC client;
+`offline_access` is required so long-running dashboard sessions can refresh.
+
+Audit retention defaults to 90 days. SQLite and each Connector are intentionally
+single-replica. Worker replay protection and audit storage use D1 transactions.

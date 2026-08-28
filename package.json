@@ -1,0 +1,45 @@
+{
+  "name": "@realmroot/cluster-access-control-plane",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.30.2",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "tsx --env-file-if-exists=.env control-plane/entry-node.ts",
+    "build": "tsup control-plane/entry-node.ts --format esm --out-dir dist-control-plane --external better-sqlite3",
+    "build:worker": "wrangler deploy --dry-run --outdir dist-worker",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "biome check control-plane",
+    "format": "biome check --write control-plane",
+    "worker:types": "wrangler types"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.12",
+    "better-sqlite3": "^12.10.0",
+    "hono": "^4.12.34",
+    "jose": "6.2.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.10",
+    "@cloudflare/workers-types": "^5.20260821.1",
+    "@types/node": "^24.3.0",
+    "@types/better-sqlite3": "^7.6.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.2",
+    "wrangler": "^4.95.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild",
+      "workerd"
+    ]
+  }
+}

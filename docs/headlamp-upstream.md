@@ -21,7 +21,7 @@ config:
   oidc:
     clientID: kubernetes-dashboard-client
     issuerURL: https://identity.example.com
-    scopes: openid,email,profile,groups
+    scopes: email,profile,groups,offline_access
     usePKCE: true
   clusterInventory:
     enabled: true
@@ -42,6 +42,15 @@ The implementation changes only:
 - its unit tests;
 - `backend/cmd/headlamp.go` to pass the deployment OIDC config into the runner.
 
+Long-running sessions also exposed an independent upstream OIDC issue: adding
+`offline_access` to scopes is insufficient when the authorization request omits
+`prompt=consent`. OIDC Core requires that consent signal for offline access
+unless the provider has another durable consent mechanism. The local patch now
+adds `prompt=consent` generically whenever the configured scopes contain
+`offline_access`, with handler-level regression coverage. This is not tied to
+the credentialless Cluster Inventory provider and should be proposed as a
+separate, small upstream change.
+
 It contains no Realmroot URL, claim, client ID, Gateway API, or product name.
 Local tests prove OIDC inheritance, absence of an exec credential, standard
 exec-provider compatibility, invalid configuration rejection, and existing
@@ -53,10 +62,12 @@ Cluster Inventory behavior.
    credentialless AccessProvider mode.
 2. Submit the minimal generic patch and tests; do not include the local Helm
    values or Gateway-specific provider name in the PR.
-3. Ask SIG Multicluster whether a standard AccessProvider name/capability should
+3. Submit the offline-access consent fix separately so it can be reviewed and
+   released independently of Cluster Inventory.
+4. Ask SIG Multicluster whether a standard AccessProvider name/capability should
    be documented in the Cluster Inventory API so dashboards can converge on
    one well-known semantic instead of local names.
-4. After merge, pin the first released Headlamp version containing the change
+5. After merge, pin the first released Headlamp version containing the change
    and remove the local Headlamp patch.
 
 No upstream change is required for the Gateway catalog or Realmroot Agent

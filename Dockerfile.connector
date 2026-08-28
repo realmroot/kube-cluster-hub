@@ -1,0 +1,12 @@
+FROM golang:1.26-alpine AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY cmd/cluster-access-connector ./cmd/cluster-access-connector
+COPY internal/connector ./internal/connector
+RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/cluster-access-connector ./cmd/cluster-access-connector
+
+FROM gcr.io/distroless/static-debian13:nonroot
+COPY --from=build /out/cluster-access-connector /cluster-access-connector
+EXPOSE 8081
+ENTRYPOINT ["/cluster-access-connector"]

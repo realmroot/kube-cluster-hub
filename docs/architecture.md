@@ -1,79 +1,112 @@
 # Architecture
 
-## Outcome
+## Design outcome
 
-One cluster directory and access boundary serves multiple Kubernetes clients
-without defining a dashboard-specific cluster protocol.
+The system has a durable control plane and a deliberately small per-cluster
+data plane:
 
 ```text
-Realmroot user ID token
-  -> Kite or Headlamp
-  -> /clusters/{cluster}/kubernetes/...
-  -> unchanged Bearer token
-  -> kube-apiserver OIDC authentication and RBAC
-
-Realmroot Agent DPoP access token
-  -> /api/agent/clusters/{cluster}/kubernetes/...
-  -> Resource Server validation and scope check
-  -> cluster-local execution credential + Kubernetes impersonation
-  -> kube-apiserver RBAC and audit
+                         +-------------------------------+
+Kite / Headlamp -------->| TypeScript Control Plane      |
+Realmroot Toolbox ------>| catalog, auth, audit, dispatch|
+                         | Worker+D1 or Node+SQLite       |
+                         +---------------+---------------+
+                                         | HTTPS + 30 s signed request
+                                         v
+                         +-------------------------------+
+                         | Go Connector (one per cluster)|
+                         | token passthrough / Agent SA  |
+                         +---------------+---------------+
+                                         | Kubernetes HTTP API
+                                         v
+                                  kube-apiserver + RBAC
 ```
 
-The two token paths are intentionally not interchangeable. An Agent access
-token has the Gateway Resource Server as its audience and must never be sent to
-kube-apiserver as if it were a Kubernetes ID token.
+There is no control-plane kubeconfig and no long-lived cluster token in the
+catalog. Each cluster keeps its own ServiceAccount token inside Kubernetes.
 
-## Protocol boundaries
+## Identity paths
 
-### Inventory
+### Human user
 
-The durable service-owned resource is a `Cluster`. Its stable ID survives
-display-name changes. It owns connection metadata, enablement, presentation
-metadata, and publication state. It never contains a user, ServiceAccount,
-client-certificate, or kubeconfig credential.
+1. Kite or Headlamp signs the user in with a standard public OIDC client and
+   PKCE.
+2. The dashboard sends the user's ID token to the control plane.
+3. The control plane validates issuer, audience, lifetime, and signature, then
+   binds the token hash to a short-lived dispatch JWT.
+4. The Connector verifies the dispatch JWT and forwards the original ID token
+   unchanged to kube-apiserver.
+5. kube-apiserver derives username/groups and performs native RBAC.
 
-The dashboard discovery representation is the SIG Multicluster Cluster
-Inventory API `ClusterProfile`. Each enabled Cluster is published as one
-ClusterProfile with an `oidc-passthrough` access provider whose server is the
-Gateway's Kubernetes proxy URI for that Cluster.
+The control plane neither maps groups nor grants Kubernetes permissions.
 
-### Kubernetes data plane
+### Agent
 
-The data-plane contract is the Kubernetes HTTP API. The Gateway only selects a
-configured upstream, applies TLS metadata, preserves streaming semantics, and
-sets the correct execution identity. It does not create a second CRUD model for
-Pods, Deployments, CRDs, Helm objects, logs, exec, or watch.
+1. Realmroot Toolbox calls the Resource Server with an RFC 9068 access token,
+   RFC 9449 DPoP proof, and RFC 8693 `act` actor identity.
+2. The control plane verifies the token, proof, authorized OAuth client, and
+   route scope (`kubernetes:read` or `kubernetes:write`).
+3. It sends only verified actor/controller fields in a signed dispatch JWT; the
+   external Agent token is never forwarded to the cluster.
+4. The Connector uses its ServiceAccount and Kubernetes impersonation. The
+   username is fixed (`cluster-access:agent`); verified identities are recorded
+   as impersonation extras and in Gateway audit records.
+5. Kubernetes RBAC remains the final authorization decision.
 
-### Agent Resource Server
+OAuth scopes are an admission ceiling. They do not replace Kubernetes RBAC.
 
-The protected resource publishes RFC 9728 metadata and an OpenAPI service
-description. Realmroot is used through standard OAuth/OIDC, RFC 9068 access
-tokens, RFC 9449 DPoP, and RFC 8693 `act`; no issuer-specific endpoints or
-claims are hard-coded.
+## Cluster catalog
 
-Agent scopes are an admission ceiling, not Kubernetes permission. A request
-must pass both the OAuth scope check and Kubernetes RBAC. The Kubernetes audit
-username is derived from the verified Agent actor, while the controlling
-subject is retained as an impersonation extra and in Gateway audit storage.
+A cluster record contains only connection and presentation metadata:
 
-## Resource proof
+| Field | Purpose |
+| --- | --- |
+| `id` | Stable DNS-label identifier; also the Connector ID |
+| `displayName`, `description` | UI presentation |
+| `accessMode` | `connector` or `direct` |
+| `connectorUrl` | Trusted HTTPS Connector endpoint; loopback HTTP is development-only |
+| `apiServerUrl` | Direct-mode Kubernetes API URL; empty in Connector mode |
+| `prometheusUrl` | Optional metrics endpoint metadata |
+| `enabled`, `default` | Availability and UI selection |
 
-| Resource | Identity | Owner | Lifecycle | Canonical URI |
-| --- | --- | --- | --- | --- |
-| Cluster | stable DNS-compatible ID | catalog administrator | create, replace, patch, delete | `/api/catalog/clusters/{clusterId}` |
-| Audit event | server-generated immutable ID | Gateway | append and retain | `/api/catalog/audit-events` collection representations |
-| ClusterProfile | Kubernetes UID/name | Cluster Inventory API | reconciled from Cluster | Kubernetes ClusterProfile API |
-| Kubernetes resource | Kubernetes API identity | target cluster | Kubernetes-native | gateway base + canonical Kubernetes URI |
+Connector mode is the production default and the only Agent execution mode.
+Direct mode exists for a publicly reachable kube-apiserver and human token
+passthrough; Workers cannot use private CA bundles or custom TLS server names.
+The catalog never stores those TLS trust values. In Connector mode, the
+Connector obtains API-server trust from its local Kubernetes configuration.
 
-The catalog uses the cursor pagination profile. Collection responses contain
-`items` and `pagination`, and navigation is also advertised with RFC 8288
-`Link` headers.
+## Deployment profiles
 
-## Deployment boundary
+| Capability | Worker + D1 | Node/Docker + SQLite |
+| --- | --- | --- |
+| Catalog, auth, audit, dispatch | Yes | Yes |
+| Human and Agent HTTP proxy | Yes | Yes |
+| watch/log streaming | Yes | Yes |
+| WebSocket exec/attach/port-forward | Worker WebSocket response | Native HTTP Upgrade bridge |
+| Direct-mode custom CA/TLS name | No | No |
+| ClusterProfile publication | Via configured inventory cluster | Via configured inventory cluster |
 
-Human passthrough works for any reachable OIDC-enabled Kubernetes API without
-a Gateway-held Kubernetes credential. Agent execution additionally requires a
-cluster-local execution identity authorized only to impersonate the configured
-Agent usernames/groups. For remote clusters this identity belongs in the
-cluster-local tunnel component or a standards-based token-exchange adapter; it
-must not become a centrally stored cluster-admin token.
+The two runtimes share `app.ts`, domain validation, auth, dispatch, inventory,
+and storage contracts. Only HTTP/runtime and database adapters differ.
+
+## Scale and failure boundaries
+
+- No informer is created per user or per cluster. Requests are streamed on
+  demand; idle clusters consume catalog rows, not resident watches.
+- A Connector has one replica by design so its in-memory dispatch replay cache
+  has a single authority. It is restarted by Kubernetes on failure.
+- A cluster failure is isolated to that Connector. Catalog, audit, and other
+  clusters continue operating.
+- Connector status authentication can update health only; it cannot authorize
+  proxy calls. Proxy authority requires a valid request-bound dispatch JWT.
+- The control plane can rotate dispatch keys by changing the JWK `kid` and
+  rolling Connectors before retiring the previous key.
+
+## Dashboard integrations
+
+Kite consumes the catalog API directly for add/edit/delete and uses the native
+Kubernetes proxy paths for all operations. Headlamp discovers enabled clusters
+from SIG Multicluster Cluster Inventory `ClusterProfile` resources. The local
+Headlamp patch only adds a credential-less “inherit current OIDC identity”
+provider; the target is an upstream provider contract, not a Gateway-specific
+Headlamp fork.
