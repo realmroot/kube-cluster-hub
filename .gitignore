@@ -1,7 +1,7 @@
 .env
 .dev.vars
-kube-cluster-hub
-kube-cluster-connector
+/kube-cluster-hub
+/kube-cluster-connector
 *.db
 *.db-shm
 *.db-wal
