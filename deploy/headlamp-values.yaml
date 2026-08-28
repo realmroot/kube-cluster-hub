@@ -1,0 +1,19 @@
+config:
+  oidc:
+    clientID: 01a046ca-bfb8-72fe-b85b-36cf0052edcf
+    issuerURL: https://id.realmroot.dev/api/auth
+    scopes: openid,email,profile,groups
+    callbackURL: http://localhost:4466/oidc-callback
+    usePKCE: true
+  clusterInventory:
+    enabled: true
+    namespaces:
+      - cluster-inventory
+    accessProvidersConfig:
+      providers:
+        - name: oidc-passthrough
+          # No execConfig: Headlamp supplies the signed-in user's OIDC token.
+serviceAccount:
+  create: true
+clusterRoleBinding:
+  create: false

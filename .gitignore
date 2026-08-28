@@ -1,0 +1,5 @@
+.env
+cluster-access-gateway
+gateway.db
+*.db-shm
+*.db-wal
