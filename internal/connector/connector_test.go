@@ -74,10 +74,10 @@ func TestConnectorForwardsVerifiedIdentities(t *testing.T) {
 	}
 	agentHeaders := <-captured
 	if agentHeaders.Get("Authorization") != "Bearer service-account-token" ||
-		agentHeaders.Get("Impersonate-User") != "cluster-access:agent" ||
-		!contains(agentHeaders.Values("Impersonate-Group"), "cluster-access:agents:read") ||
-		!contains(agentHeaders.Values("Impersonate-Group"), "cluster-access:agents:write") ||
-		agentHeaders.Get("Impersonate-Extra-cluster-access.io%2Fagent-subject") != "agent-1" {
+		agentHeaders.Get("Impersonate-User") != "kube-cluster-hub:agent" ||
+		!contains(agentHeaders.Values("Impersonate-Group"), "kube-cluster-hub:agents:read") ||
+		!contains(agentHeaders.Values("Impersonate-Group"), "kube-cluster-hub:agents:write") ||
+		agentHeaders.Get("Impersonate-Extra-kube-cluster-hub.dev%2Fagent-subject") != "agent-1" {
 		t.Fatalf("Agent identity headers = %#v", agentHeaders)
 	}
 
@@ -154,8 +154,8 @@ func connectorFixture(t *testing.T, key *ecdsa.PrivateKey, upstream *httptest.Se
 	connector, err := New(Config{
 		Address: ":0", ClusterID: "development", APIServerURL: upstream.URL, CABundleFile: caPath,
 		ServiceAccountTokenFile: tokenPath, DispatchIssuer: "https://control.example.com",
-		DispatchAudience: "cluster-access-connector", DispatchPublicKeys: map[string]*ecdsa.PublicKey{"dispatch-key": &key.PublicKey},
-		AgentReadGroup: "cluster-access:agents:read", AgentWriteGroup: "cluster-access:agents:write",
+		DispatchAudience: "kube-cluster-connector", DispatchPublicKeys: map[string]*ecdsa.PublicKey{"dispatch-key": &key.PublicKey},
+		AgentReadGroup: "kube-cluster-hub:agents:read", AgentWriteGroup: "kube-cluster-hub:agents:write",
 		ControlPlaneURL: "https://control.example.com", StatusToken: "status-token", StatusInterval: time.Minute,
 	})
 	if err != nil {
@@ -185,7 +185,7 @@ func connectorRequestAt(t *testing.T, connector *Connector, key *ecdsa.PrivateKe
 func standardClaims(id string) jwt.Claims {
 	now := time.Now().UTC()
 	return jwt.Claims{
-		Issuer: "https://control.example.com", Audience: jwt.Audience{"cluster-access-connector"}, ID: id,
+		Issuer: "https://control.example.com", Audience: jwt.Audience{"kube-cluster-connector"}, ID: id,
 		IssuedAt: jwt.NewNumericDate(now), Expiry: jwt.NewNumericDate(now.Add(30 * time.Second)),
 	}
 }

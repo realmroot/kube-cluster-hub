@@ -10,7 +10,7 @@ adapters. Choose one; do not run both against the same public Resource Server.
 | Cloudflare Worker | D1 | Internet-facing, horizontally distributed control plane |
 | Node container | SQLite on a persistent volume | Single-replica VPS or Kubernetes deployment |
 
-Both require a stable HTTPS `GATEWAY_PUBLIC_URL`. The URL is also the OAuth
+Both require a stable HTTPS `HUB_PUBLIC_URL`. The URL is also the OAuth
 Resource Server origin and therefore cannot be changed without updating the
 registered Realmroot Resource and obtaining new audience-bound Agent tokens.
 
@@ -39,7 +39,7 @@ ServiceAccount token in control-plane configuration.
 3. Apply schema before the first deployment:
 
    ```sh
-   pnpm exec wrangler d1 migrations apply cluster-access-control-plane --remote
+   pnpm exec wrangler d1 migrations apply kube-cluster-hub --remote
    ```
 
 4. Deploy:
@@ -58,7 +58,7 @@ automatically.
 ## Node/Docker/SQLite
 
 Build `Dockerfile` and run exactly one replica with a persistent writable mount
-for `GATEWAY_DATABASE_DSN`. The container itself runs non-root with a read-only
+for `HUB_DATABASE_DSN`. The container itself runs non-root with a read-only
 root filesystem. `deploy/control-plane.yaml` provides a Kubernetes template
 using `Recreate` strategy and a ReadWriteOnce PVC.
 
@@ -87,19 +87,17 @@ outside loopback.
 Keep `replicas: 1`. Dispatch replay state is intentionally in memory and a
 request expires after 30 seconds. Kubernetes restarts the Pod on failure.
 
-## Headlamp and Kite
+## Dashboard clients
 
-- Kite receives the catalog base URL and API version `2026-08-28`. Its add/edit
-  form writes metadata only.
-- Headlamp requires Cluster Inventory API v0.1.3, the reader RBAC in
-  `deploy/headlamp-inventory-rbac.yaml`, and the generic current-user OIDC
-  provider described in `headlamp-upstream.md`.
-- Configure Headlamp scopes as `email,profile,groups,offline_access`; Headlamp
-  adds `openid` itself and requests consent for offline refresh.
-- The browser origin and registered callback host must match exactly. For the
-  local example, open `http://localhost:4466` because the callback is
-  `http://localhost:4466/oidc-callback`; `127.0.0.1` is a different web-storage
-  origin even though it reaches the same port.
+- The built-in browser UI reads `GET /api/ui-config`, performs public-client
+  Authorization Code + PKCE, and requests the catalog resource indicator.
+- Kite receives the Hub origin and API version `2026-08-28`. Its add/edit form
+  writes metadata only. Kite must use the Access Token for `/api/catalog/*`
+  and the ID Token for `/clusters/*/kubernetes/*`.
+- Other dashboards can consume the same catalog/OpenAPI contract or the
+  credential-free Cluster Inventory `ClusterProfile` projection.
+- Browser origins and registered callback URLs must match exactly. Loopback
+  hostnames such as `localhost` and `127.0.0.1` are different origins.
 
 ## Operations
 
@@ -108,7 +106,7 @@ request expires after 30 seconds. Kubernetes restarts the Pod on failure.
 - Rotate a dispatch key by adding the new public JWK to every Connector JWKS,
   switching the control-plane private JWK after all Connectors trust its `kid`,
   and removing the retired public JWK after in-flight dispatches have expired.
-- Retain Gateway audit according to `AUDIT_RETENTION` and collect native
+- Retain Hub audit according to `AUDIT_RETENTION` and collect native
   kube-apiserver audit separately; they answer different boundary questions.
 - Test a representative read, forbidden write, allowed write, watch, and exec
   after every Connector or Kubernetes version upgrade.

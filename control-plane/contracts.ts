@@ -3,10 +3,24 @@ import type { Config } from './config'
 export const apiVersion = '2026-08-28'
 export const scopes = {
   clustersRead: 'clusters:read',
+  clustersWrite: 'clusters:write',
   kubernetesRead: 'kubernetes:read',
   kubernetesWrite: 'kubernetes:write',
   auditRead: 'audit-events:read',
 } as const
+
+export const catalogScopes = [
+  scopes.clustersRead,
+  scopes.clustersWrite,
+  scopes.auditRead,
+] as const
+
+export const agentScopes = [
+  scopes.clustersRead,
+  scopes.kubernetesRead,
+  scopes.kubernetesWrite,
+  scopes.auditRead,
+] as const
 
 export function kubernetesScope(method: string, uri: string): string {
   const pathname = uri.split('?', 1)[0] || '/'
@@ -61,10 +75,84 @@ const cluster = {
   },
 }
 
+const clusterInput = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['displayName', 'accessMode', 'enabled', 'default'],
+  properties: {
+    displayName: { type: 'string', minLength: 1 },
+    description: { type: 'string' },
+    apiServerUrl: { type: 'string', format: 'uri' },
+    prometheusUrl: { type: 'string', format: 'uri' },
+    accessMode: { type: 'string', enum: ['direct', 'connector'] },
+    connectorId: { type: 'string' },
+    connectorUrl: { type: 'string', format: 'uri' },
+    enabled: { type: 'boolean' },
+    default: { type: 'boolean' },
+  },
+}
+
+const auditEvent = {
+  type: 'object',
+  required: [
+    'id',
+    'createdAt',
+    'requestId',
+    'principalType',
+    'clusterId',
+    'method',
+    'path',
+    'status',
+    'durationMillis',
+  ],
+  properties: {
+    id: { type: 'integer', minimum: 1 },
+    createdAt: { type: 'string', format: 'date-time' },
+    requestId: { type: 'string' },
+    tokenId: { type: 'string' },
+    principalType: { type: 'string', enum: ['user', 'agent'] },
+    controllerSubject: { type: 'string' },
+    agentIssuer: { type: 'string' },
+    agentSubject: { type: 'string' },
+    userSubject: { type: 'string' },
+    clientId: { type: 'string' },
+    scopes: { type: 'string' },
+    clusterId: { type: 'string' },
+    method: { type: 'string' },
+    path: { type: 'string' },
+    status: { type: 'integer', minimum: 100, maximum: 599 },
+    durationMillis: { type: 'integer', minimum: 0 },
+  },
+}
+
+const connectorStatus = {
+  type: 'object',
+  required: [
+    'connectorId',
+    'clusterId',
+    'version',
+    'kubernetesVersion',
+    'capabilities',
+    'state',
+    'lastError',
+    'observedAt',
+  ],
+  properties: {
+    connectorId: { type: 'string' },
+    clusterId: { type: 'string' },
+    version: { type: 'string' },
+    kubernetesVersion: { type: 'string' },
+    capabilities: { type: 'array', items: { type: 'string' } },
+    state: { type: 'string', enum: ['ready', 'degraded'] },
+    lastError: { type: 'string' },
+    observedAt: { type: 'string', format: 'date-time' },
+  },
+}
+
 export function catalogOpenApi(config: Config): object {
   return {
     openapi: '3.1.0',
-    info: { title: 'Cluster Access Gateway Catalog API', version: apiVersion },
+    info: { title: 'Kube Cluster Hub Catalog API', version: apiVersion },
     servers: [{ url: config.catalogUrl }],
     security: [{ oidc: [] }],
     components: {
@@ -100,17 +188,25 @@ export function catalogOpenApi(config: Config): object {
       },
       schemas: {
         Cluster: cluster,
-        AuditEvent: { type: 'object' },
+        ClusterInput: clusterInput,
+        AuditEvent: auditEvent,
+        ConnectorStatus: connectorStatus,
         Problem: problem,
       },
     },
     paths: {
       '/clusters': {
-        get: operation('listClusters', 'List clusters', [
-          parameter('apiVersion'),
-          parameter('pageSize'),
-          parameter('pageToken'),
-        ]),
+        get: operation(
+          'listClusters',
+          'List clusters',
+          [
+            parameter('apiVersion'),
+            parameter('pageSize'),
+            parameter('pageToken'),
+          ],
+          false,
+          scopes.clustersRead,
+        ),
       },
       '/clusters/{clusterId}': {
         parameters: [
@@ -121,18 +217,27 @@ export function catalogOpenApi(config: Config): object {
             schema: { type: 'string' },
           },
         ],
-        get: operation('getCluster', 'Get a cluster', [
-          parameter('apiVersion'),
-        ]),
+        get: operation(
+          'getCluster',
+          'Get a cluster',
+          [parameter('apiVersion')],
+          false,
+          scopes.clustersRead,
+        ),
         put: operation(
           'replaceCluster',
           'Create or replace a cluster',
           [parameter('apiVersion')],
           true,
+          scopes.clustersWrite,
         ),
-        delete: operation('deleteCluster', 'Delete a cluster', [
-          parameter('apiVersion'),
-        ]),
+        delete: operation(
+          'deleteCluster',
+          'Delete a cluster',
+          [parameter('apiVersion')],
+          false,
+          scopes.clustersWrite,
+        ),
       },
       '/audit-events': {
         get: operation(
@@ -143,6 +248,8 @@ export function catalogOpenApi(config: Config): object {
             parameter('pageSize'),
             parameter('pageToken'),
           ],
+          false,
+          scopes.auditRead,
         ),
       },
       '/connector-statuses/{connectorId}': {
@@ -158,6 +265,8 @@ export function catalogOpenApi(config: Config): object {
           'getConnectorStatus',
           'Get the latest Connector status',
           [parameter('apiVersion')],
+          false,
+          scopes.clustersRead,
         ),
       },
     },
@@ -169,7 +278,7 @@ export function agentOpenApi(config: Config): object {
   return {
     openapi: '3.1.0',
     info: {
-      title: 'Cluster Access Gateway Agent API',
+      title: 'Kube Cluster Hub Agent API',
       version: apiVersion,
       description:
         'Discover clusters and invoke the canonical Kubernetes HTTP API with OAuth Agent authority.',
@@ -185,7 +294,7 @@ export function agentOpenApi(config: Config): object {
       },
       schemas: {
         Cluster: cluster,
-        AuditEvent: { type: 'object' },
+        AuditEvent: auditEvent,
         Problem: problem,
       },
     },
@@ -257,10 +366,12 @@ function operation(
   summary: string,
   parameters: object[] = [],
   body = false,
+  scope?: string,
 ): object {
   return {
     operationId,
     summary,
+    ...(scope ? { security: [{ oidc: [scope] }] } : {}),
     ...(parameters.length ? { parameters } : {}),
     ...(body
       ? {
@@ -268,7 +379,7 @@ function operation(
             required: true,
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/Cluster' },
+                schema: { $ref: '#/components/schemas/ClusterInput' },
               },
             },
           },

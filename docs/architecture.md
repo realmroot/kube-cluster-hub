@@ -7,7 +7,7 @@ data plane:
 
 ```text
                          +-------------------------------+
-Kite / Headlamp -------->| TypeScript Control Plane      |
+Browser UI / Kite ------->| TypeScript Control Plane      |
 Realmroot Toolbox ------>| catalog, auth, audit, dispatch|
                          | Worker+D1 or Node+SQLite       |
                          +---------------+---------------+
@@ -29,10 +29,12 @@ catalog. Each cluster keeps its own ServiceAccount token inside Kubernetes.
 
 ### Human user
 
-1. Kite or Headlamp signs the user in with a standard public OIDC client and
-   PKCE.
-2. The dashboard sends the user's ID token to the control plane.
-3. The control plane validates issuer, audience, lifetime, and signature, then
+1. The Hub UI or Kite signs the user in with a standard public OIDC client and
+   PKCE. The catalog request includes an RFC 8707 resource indicator.
+2. The dashboard uses the Access Token for catalog APIs and the ID Token for
+   Kubernetes APIs. Kite keeps both in its encrypted server-side session.
+3. The control plane validates the Kubernetes ID Token's issuer, audience,
+   lifetime, and signature, then
    binds the token hash to a short-lived dispatch JWT.
 4. The Connector verifies the dispatch JWT and forwards the original ID token
    unchanged to kube-apiserver.
@@ -49,8 +51,8 @@ The control plane neither maps groups nor grants Kubernetes permissions.
 3. It sends only verified actor/controller fields in a signed dispatch JWT; the
    external Agent token is never forwarded to the cluster.
 4. The Connector uses its ServiceAccount and Kubernetes impersonation. The
-   username is fixed (`cluster-access:agent`); verified identities are recorded
-   as impersonation extras and in Gateway audit records.
+   username is fixed (`kube-cluster-hub:agent`); verified identities are recorded
+   as impersonation extras and in Hub audit records.
 5. Kubernetes RBAC remains the final authorization decision.
 
 OAuth scopes are an admission ceiling. They do not replace Kubernetes RBAC.
@@ -86,8 +88,9 @@ Connector obtains API-server trust from its local Kubernetes configuration.
 | Direct-mode custom CA/TLS name | No | No |
 | ClusterProfile publication | Via configured inventory cluster | Via configured inventory cluster |
 
-The two runtimes share `app.ts`, domain validation, auth, dispatch, inventory,
-and storage contracts. Only HTTP/runtime and database adapters differ.
+The two runtimes share the Hono route modules, domain validation, auth,
+dispatch, inventory, and Drizzle schema/store. Only runtime startup and the
+D1/SQLite database adapters differ.
 
 ## Scale and failure boundaries
 
@@ -105,8 +108,7 @@ and storage contracts. Only HTTP/runtime and database adapters differ.
 ## Dashboard integrations
 
 Kite consumes the catalog API directly for add/edit/delete and uses the native
-Kubernetes proxy paths for all operations. Headlamp discovers enabled clusters
-from SIG Multicluster Cluster Inventory `ClusterProfile` resources. The local
-Headlamp patch only adds a credential-less “inherit current OIDC identity”
-provider; the target is an upstream provider contract, not a Gateway-specific
-Headlamp fork.
+Kubernetes proxy paths for all operations. Other dashboards can discover
+enabled clusters from SIG Multicluster Cluster Inventory `ClusterProfile`
+resources. No dashboard-specific credential is placed in a catalog row or
+ClusterProfile.

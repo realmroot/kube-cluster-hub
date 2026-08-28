@@ -163,12 +163,12 @@ function clusterProfile(
       namespace,
       ...(resourceVersion ? { resourceVersion } : {}),
       labels: {
-        'multicluster.x-k8s.io/cluster-manager': 'cluster-access-gateway',
+        'multicluster.x-k8s.io/cluster-manager': 'kube-cluster-hub',
       },
     },
     spec: {
       displayName: cluster.displayName,
-      clusterManager: { name: 'cluster-access-gateway' },
+      clusterManager: { name: 'kube-cluster-hub' },
     },
   }
 }
@@ -200,8 +200,8 @@ function clusterProfileStatus(
           status: cluster.enabled ? 'True' : 'False',
           reason: cluster.enabled ? 'Published' : 'Disabled',
           message: cluster.enabled
-            ? 'Cluster is enabled and published by Cluster Access Gateway'
-            : 'Cluster is disabled in Cluster Access Gateway',
+            ? 'Cluster is enabled and published by Kube Cluster Hub'
+            : 'Cluster is disabled in Kube Cluster Hub',
           lastTransitionTime:
             previousTransitionTime ?? new Date().toISOString(),
         },
@@ -240,9 +240,9 @@ function profileIsCurrent(
 ): boolean {
   return (
     current?.metadata?.labels?.['multicluster.x-k8s.io/cluster-manager'] ===
-      'cluster-access-gateway' &&
+      'kube-cluster-hub' &&
     current.spec?.displayName === cluster.displayName &&
-    current.spec?.clusterManager?.name === 'cluster-access-gateway'
+    current.spec?.clusterManager?.name === 'kube-cluster-hub'
   )
 }
 
@@ -263,8 +263,7 @@ function statusIsCurrent(
       `${accessUrl}/clusters/${cluster.id}/kubernetes` &&
     condition?.status === 'True' &&
     condition.reason === 'Published' &&
-    condition.message ===
-      'Cluster is enabled and published by Cluster Access Gateway'
+    condition.message === 'Cluster is enabled and published by Kube Cluster Hub'
   )
 }
 

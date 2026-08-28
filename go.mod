@@ -1,4 +1,4 @@
-module github.com/realmroot/cluster-access-gateway
+module github.com/realmroot/kube-cluster-hub
 
 go 1.26.0
 

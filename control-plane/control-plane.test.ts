@@ -46,9 +46,10 @@ describe('control plane', () => {
     }
     forwarded = []
     config = loadConfig({
-      GATEWAY_PUBLIC_URL: 'https://gateway.example.com',
+      HUB_PUBLIC_URL: 'https://gateway.example.com',
+      HUB_UI_CLIENT_ID: 'kubernetes-client',
       OIDC_ISSUER: 'https://identity.example.com',
-      OIDC_AUDIENCE: 'kubernetes-client',
+      KUBERNETES_OIDC_AUDIENCE: 'kubernetes-client',
       CATALOG_ADMIN_GROUPS: 'platform-admins',
       RESOURCE_SERVER_URL: 'https://gateway.example.com/api/agent',
       RESOURCE_SERVER_ISSUER: 'https://identity.example.com',
@@ -60,6 +61,7 @@ describe('control plane', () => {
       type: 'user',
       subject: 'user-1',
       groups: ['platform-admins'],
+      scopes: ['clusters:read', 'clusters:write', 'audit-events:read'],
       token: 'user-id-token',
     }
     const agent: AgentPrincipal = {
@@ -83,12 +85,13 @@ describe('control plane', () => {
     dependencies = {
       config,
       store,
-      users: {
+      catalogUsers: {
         verify: async (authorization) => {
           if (authorization === 'Bearer viewer') return { ...user, groups: [] }
           return user
         },
       },
+      kubernetesUsers: { verify: async () => user },
       agents: { verify: async () => agent },
       proxy: { signer, fetch: fetcher },
       inventory: {

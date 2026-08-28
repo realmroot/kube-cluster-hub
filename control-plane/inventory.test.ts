@@ -26,9 +26,10 @@ describe('ClusterProfile publication', () => {
     privateJwk.kid = 'inventory-test'
     privateJwk.alg = 'ES256'
     const config = loadConfig({
-      GATEWAY_PUBLIC_URL: 'https://gateway.example.com',
+      HUB_PUBLIC_URL: 'https://gateway.example.com',
+      HUB_UI_CLIENT_ID: 'kubernetes-client',
       OIDC_ISSUER: 'https://identity.example.com',
-      OIDC_AUDIENCE: 'kubernetes-client',
+      KUBERNETES_OIDC_AUDIENCE: 'kubernetes-client',
       CATALOG_ADMIN_GROUPS: 'platform-admins',
       RESOURCE_SERVER_ISSUER: 'https://identity.example.com',
       RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS: 'toolbox-client',

@@ -2,9 +2,10 @@
 
 ## Public APIs
 
-Every catalog request carries `API-Version: 2026-08-28` and a standard OIDC
-Bearer ID token. Reads require a valid user. Mutations, audit reads, and
-Connector-status reads also require a group in `CATALOG_ADMIN_GROUPS`.
+Every catalog request carries `API-Version: 2026-08-28` and a resource-audience
+OAuth Bearer Access Token. Reads require their published catalog scope.
+Mutations, audit reads, and Connector-status reads additionally require a group
+in `CATALOG_ADMIN_GROUPS`. The catalog token is never sent to Kubernetes.
 
 | Method and URI | Meaning |
 | --- | --- |
@@ -54,7 +55,7 @@ The transport is normal HTTP semantics over trusted HTTPS. The control plane
 forwards method, path, query, headers, body, response status, trailers, and
 streaming behavior. It adds:
 
-- `Authorization: Dispatch <JWT>`;
+- `Authorization: Bearer <dispatch JWT>`;
 - `X-Cluster-Authorization: Bearer <ID token>` for the human path only.
 
 The ES256 dispatch JWT expires after 30 seconds and binds:
@@ -62,7 +63,6 @@ The ES256 dispatch JWT expires after 30 seconds and binds:
 - issuer, audience, `kid`, `iat`, `exp`, and unique `jti`;
 - Connector/cluster ID;
 - HTTP method and full path/query;
-- SHA-256 body hash;
 - either the human token hash or the verified Agent attribution and requested
   Kubernetes scope.
 
@@ -79,8 +79,8 @@ kube-apiserver performs OIDC authentication and group-to-RBAC authorization.
 For Agents, the Connector authenticates with its projected cluster-local
 ServiceAccount token and sends controlled impersonation headers:
 
-- username: `cluster-access:agent`;
-- group: `cluster-access:agents:read` or `cluster-access:agents:write`;
+- username: `kube-cluster-hub:agent`;
+- group: `kube-cluster-hub:agents:read` or `kube-cluster-hub:agents:write`;
 - extras: verified actor issuer/subject and controller subject.
 
 The ServiceAccount is granted only the `impersonate` verbs in
@@ -108,8 +108,9 @@ as environment variables or platform secrets:
 - `CONNECTOR_STATUS_TOKEN` authorizes only heartbeat writes.
 
 No generated secret file, launcher, kubeconfig, or dashboard client secret is
-required. The dashboards use one public Authorization Code + PKCE OIDC client;
-`offline_access` is required so long-running dashboard sessions can refresh.
+required. Dashboards use one public Authorization Code + PKCE OIDC client and
+RFC 8707 resource indicators for the catalog Access Token. `offline_access` is
+required so long-running dashboard sessions can refresh.
 
 Audit retention defaults to 90 days. SQLite and each Connector are intentionally
 single-replica. Worker replay protection and audit storage use D1 transactions.

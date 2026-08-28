@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.30.2 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
+          cache: true
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec biome check .
+      - run: pnpm typecheck
+      - run: pnpm test:coverage
+      - run: pnpm test:worker
+      - run: go vet ./internal/connector ./cmd/kube-cluster-connector
+      - run: go test -race ./internal/connector ./cmd/kube-cluster-connector
+      - run: pnpm build
+      - run: pnpm build:node
+      - run: go build ./cmd/kube-cluster-connector

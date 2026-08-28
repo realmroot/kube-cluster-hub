@@ -1,18 +1,8 @@
-export type SQLValue = string | number | null
+import type { SqliteRemoteDatabase } from 'drizzle-orm/sqlite-proxy'
+import type { schema } from './schema'
 
-export interface SQLStatement {
-  sql: string
-  values?: readonly SQLValue[]
-}
+export type HubDatabase = SqliteRemoteDatabase<typeof schema>
 
-export interface SQLResult {
-  changes: number
-  lastRowId?: number
-}
-
-export interface Database {
-  first<T>(sql: string, values?: readonly SQLValue[]): Promise<T | undefined>
-  all<T>(sql: string, values?: readonly SQLValue[]): Promise<T[]>
-  run(sql: string, values?: readonly SQLValue[]): Promise<SQLResult>
-  batch(statements: readonly SQLStatement[]): Promise<SQLResult[]>
+export interface DatabaseAdapter {
+  readonly orm: HubDatabase
 }

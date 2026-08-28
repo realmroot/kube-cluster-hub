@@ -2,28 +2,7 @@ import { bootstrap, type IdentityRuntime, prepareIdentity } from './bootstrap'
 import { type ConfigSource, loadConfig } from './config'
 import { D1DatabaseAdapter } from './database-d1'
 
-interface WorkerSecrets {
-  GATEWAY_PUBLIC_URL: string
-  GATEWAY_INVENTORY_ACCESS_URL?: string
-  OIDC_ISSUER: string
-  OIDC_AUDIENCE: string
-  OIDC_GROUPS_CLAIM?: string
-  CATALOG_ADMIN_GROUPS: string
-  RESOURCE_SERVER_URL: string
-  RESOURCE_SERVER_ISSUER: string
-  RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS: string
-  RESOURCE_SERVER_JWT_ALGORITHMS?: string
-  KUBERNETES_AGENT_READ_GROUP?: string
-  KUBERNETES_AGENT_WRITE_GROUP?: string
-  DISPATCH_SIGNING_PRIVATE_JWK: string
-  DISPATCH_ISSUER?: string
-  DISPATCH_AUDIENCE?: string
-  CONNECTOR_STATUS_TOKEN: string
-  INVENTORY_CLUSTER_ID?: string
-  AUDIT_RETENTION?: string
-}
-
-type WorkerEnv = WorkerSecrets & { DB: D1Database }
+type WorkerEnv = Cloudflare.Env
 
 let identityCache:
   | { fingerprint: string; promise: Promise<IdentityRuntime> }
@@ -54,10 +33,14 @@ export default {
       const runtime = await bootstrap(
         new D1DatabaseAdapter(env.DB),
         env satisfies ConfigSource,
-        fetch,
+        (input, init) => fetch(input, init),
         identity,
       )
-      return await runtime.app.fetch(request, env, ctx)
+      const response = await runtime.app.fetch(request, env, ctx)
+      if (response.status === 404 && isFrontendNavigation(request)) {
+        return withSecurityHeaders(await env.ASSETS.fetch(request))
+      }
+      return withSecurityHeaders(response)
     } catch (error) {
       console.error(
         JSON.stringify({
@@ -89,7 +72,7 @@ export default {
     const runtime = await bootstrap(
       new D1DatabaseAdapter(env.DB),
       env satisfies ConfigSource,
-      fetch,
+      (input, init) => fetch(input, init),
       identity,
     )
     await runtime.inventory.reconcile()
@@ -98,3 +81,32 @@ export default {
     )
   },
 } satisfies ExportedHandler<WorkerEnv>
+
+function isFrontendNavigation(request: Request): boolean {
+  if (request.method !== 'GET') return false
+  const path = new URL(request.url).pathname
+  return ![
+    '/api/',
+    '/clusters/',
+    '/openapi/',
+    '/.well-known/',
+    '/healthz',
+    '/readyz',
+  ].some((prefix) => path === prefix || path.startsWith(prefix))
+}
+
+function withSecurityHeaders(response: Response): Response {
+  const secured = new Response(response.body, response)
+  secured.headers.set('X-Content-Type-Options', 'nosniff')
+  secured.headers.set('Referrer-Policy', 'no-referrer')
+  secured.headers.set(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=()',
+  )
+  secured.headers.set('Cross-Origin-Opener-Policy', 'same-origin')
+  secured.headers.set(
+    'Content-Security-Policy',
+    "default-src 'self'; connect-src 'self' https:; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self' https:",
+  )
+  return secured
+}

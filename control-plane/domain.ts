@@ -35,6 +35,7 @@ export interface UserPrincipal {
   type: 'user'
   subject: string
   groups: readonly string[]
+  scopes: readonly string[]
   token: string
 }
 

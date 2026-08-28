@@ -82,7 +82,7 @@ func (c *Connector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusServiceUnavailable, "execution-credential-unavailable", err.Error())
 		return
 	}
-	r.Header.Set("X-Cluster-Access-URI", uri)
+	r.Header.Set("X-Kube-Cluster-Hub-URI", uri)
 	w.Header().Set("Request-Id", claims.RequestID)
 	c.proxy.ServeHTTP(w, r)
 }
@@ -93,10 +93,10 @@ func (c *Connector) newProxy() *httputil.ReverseProxy {
 	originalDirector := proxy.Director
 	proxy.Director = func(request *http.Request) {
 		originalDirector(request)
-		request.URL.Path = joinPath(c.upstream.Path, request.Header.Get("X-Cluster-Access-URI"))
+		request.URL.Path = joinPath(c.upstream.Path, request.Header.Get("X-Kube-Cluster-Hub-URI"))
 		request.URL.RawPath = ""
 		request.Host = c.upstream.Host
-		request.Header.Del("X-Cluster-Access-URI")
+		request.Header.Del("X-Kube-Cluster-Hub-URI")
 	}
 	proxy.ErrorHandler = func(writer http.ResponseWriter, _ *http.Request, err error) {
 		writeProblem(writer, http.StatusBadGateway, "kubernetes-unavailable", err.Error())
@@ -150,14 +150,14 @@ func (c *Connector) serviceAccountToken() (string, error) {
 
 func applyAgentIdentity(request *http.Request, token, readGroup, writeGroup string, claims *DispatchClaims) {
 	request.Header.Set("Authorization", "Bearer "+token)
-	request.Header.Set("Impersonate-User", "cluster-access:agent")
+	request.Header.Set("Impersonate-User", "kube-cluster-hub:agent")
 	request.Header.Add("Impersonate-Group", readGroup)
 	if strings.Fields(claims.Scopes) != nil && contains(strings.Fields(claims.Scopes), "kubernetes:write") {
 		request.Header.Add("Impersonate-Group", writeGroup)
 	}
-	request.Header.Set("Impersonate-Extra-cluster-access.io%2Fagent-issuer", claims.AgentIssuer)
-	request.Header.Set("Impersonate-Extra-cluster-access.io%2Fagent-subject", claims.AgentSubject)
-	request.Header.Set("Impersonate-Extra-cluster-access.io%2Fcontroller-subject", claims.ControllerSubject)
+	request.Header.Set("Impersonate-Extra-kube-cluster-hub.dev%2Fagent-issuer", claims.AgentIssuer)
+	request.Header.Set("Impersonate-Extra-kube-cluster-hub.dev%2Fagent-subject", claims.AgentSubject)
+	request.Header.Set("Impersonate-Extra-kube-cluster-hub.dev%2Fcontroller-subject", claims.ControllerSubject)
 }
 
 func inventoryRequestAllowed(method, requestPath string) bool {
@@ -190,7 +190,7 @@ func writeProblem(w http.ResponseWriter, status int, problemType, detail string)
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"type": "https://cluster-access.io/problems/" + problemType, "title": http.StatusText(status),
+		"type": "https://kube-cluster-hub.dev/problems/" + problemType, "title": http.StatusText(status),
 		"status": status, "detail": detail,
 	})
 }

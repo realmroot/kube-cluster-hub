@@ -70,5 +70,5 @@ Cluster Inventory behavior.
 5. After merge, pin the first released Headlamp version containing the change
    and remove the local Headlamp patch.
 
-No upstream change is required for the Gateway catalog or Realmroot Agent
+No upstream change is required for the Hub catalog or Realmroot Agent
 Resource Server; those are independent services and remain outside Headlamp.

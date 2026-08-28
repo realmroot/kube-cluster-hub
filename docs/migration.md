@@ -45,7 +45,7 @@ the old SQLite file or snapshot its PVC before first startup.
    - `enabled=true` after heartbeat is ready.
 6. Verify user OIDC read, native RBAC denial, Agent read/write, watch, exec,
    audit, and ClusterProfile discovery.
-7. Point Kite, Headlamp ClusterProfiles, Realmroot Resource metadata, and public
+7. Point Kite, ClusterProfile consumers, Realmroot Resource metadata, and public
    DNS at the new control plane.
 8. Stop and remove the old Deployment, Service, ServiceAccount, and RBAC.
 9. Retain the old PVC for the agreed recovery window, then delete it under the

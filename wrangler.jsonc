@@ -1,18 +1,44 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "cluster-access-control-plane",
+  "name": "kube-cluster-hub",
+  "account_id": "94a89d03c0fc785c8dcbd3c674d6742a",
   "main": "control-plane/entry-worker.ts",
+  "workers_dev": true,
+  "preview_urls": false,
   "compatibility_date": "2026-08-28",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
   },
+  "vars": {
+    "HUB_PUBLIC_URL": "https://kube-cluster-hub.saltbo.workers.dev",
+    "HUB_INVENTORY_ACCESS_URL": "https://kube-cluster-hub.saltbo.workers.dev",
+    "HUB_UI_CLIENT_ID": "01a046ca-bfb8-72fe-b85b-36cf0052edcf",
+    "OIDC_ISSUER": "https://id.realmroot.dev/api/auth",
+    "KUBERNETES_OIDC_AUDIENCE": "01a046ca-bfb8-72fe-b85b-36cf0052edcf",
+    "OIDC_GROUPS_CLAIM": "groups",
+    "CATALOG_ADMIN_GROUPS": "platform-admins",
+    "RESOURCE_SERVER_URL": "https://kube-cluster-hub.saltbo.workers.dev/api/agent",
+    "RESOURCE_SERVER_ISSUER": "https://id.realmroot.dev/api/auth",
+    "RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS": "realmroot-cli",
+    "RESOURCE_SERVER_JWT_ALGORITHMS": "RS256",
+    "KUBERNETES_AGENT_READ_GROUP": "kube-cluster-hub:agents:read",
+    "KUBERNETES_AGENT_WRITE_GROUP": "kube-cluster-hub:agents:write",
+    "DISPATCH_ISSUER": "https://kube-cluster-hub.saltbo.workers.dev",
+    "DISPATCH_AUDIENCE": "kube-cluster-connector",
+    "INVENTORY_CLUSTER_ID": "local-kind",
+    "AUDIT_RETENTION": "2160h"
+  },
+  "assets": {
+    "binding": "ASSETS",
+    "not_found_handling": "none"
+  },
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "cluster-access-control-plane",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_name": "kube-cluster-hub",
+      "database_id": "1bd328fa-870f-47bc-87f1-8e0747c07598",
       "migrations_dir": "migrations"
     }
   ],

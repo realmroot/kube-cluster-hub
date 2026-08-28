@@ -5,4 +5,4 @@ e2e
 node_modules
 dist-control-plane
 dist-worker
-cluster-access-connector
+kube-cluster-connector

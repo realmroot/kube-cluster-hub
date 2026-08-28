@@ -2,7 +2,7 @@ import { type AppDependencies, createApp } from './app'
 import { AgentVerifier, discoverIssuer, UserVerifier } from './auth'
 import type { Config, ConfigSource } from './config'
 import { loadConfig } from './config'
-import type { Database } from './database'
+import type { DatabaseAdapter } from './database'
 import { DispatchSigner } from './dispatch'
 import { InventoryPublisher } from './inventory'
 import { Store } from './store'
@@ -37,23 +37,30 @@ export async function prepareIdentity(
 }
 
 export async function bootstrap(
-  database: Database,
+  database: DatabaseAdapter,
   source: ConfigSource,
   fetcher = fetch,
   preparedIdentity?: IdentityRuntime,
 ): Promise<Runtime> {
   const config = loadConfig(source)
-  const store = new Store(database)
+  const store = new Store(database.orm)
   const identity = preparedIdentity ?? (await prepareIdentity(config))
   const proxy = { signer: identity.signer, fetch: fetcher }
   const inventory = new InventoryPublisher(config, store, proxy)
   const dependencies: AppDependencies = {
     config,
     store,
-    users: new UserVerifier(
+    catalogUsers: new UserVerifier(
+      identity.userIssuer,
+      config.catalogUrl,
+      config.oidcGroupsClaim,
+      'access',
+    ),
+    kubernetesUsers: new UserVerifier(
       identity.userIssuer,
       config.oidcAudience,
       config.oidcGroupsClaim,
+      'id',
     ),
     agents: new AgentVerifier(
       identity.agentIssuer,

@@ -5,7 +5,7 @@ Updated: 2026-08-28
 ## Goal
 
 Provide one simple, protocol-oriented cluster directory and access boundary for
-Kite, Headlamp, other dashboards, and Realmroot Agents. The control plane must
+Kite, other dashboards, and Realmroot Agents. The control plane must
 run from one TypeScript implementation on Workers/D1 or Node/Docker/SQLite; a
 small Go Connector must keep Kubernetes credentials and Agent execution inside
 each cluster. Kubernetes HTTP/OIDC/RBAC remain authoritative.
@@ -19,10 +19,10 @@ each cluster. Kubernetes HTTP/OIDC/RBAC remain authoritative.
 | Catalog and migration | API version `2026-08-28` models `connector` and `direct` access. Existing SQLite catalog/audit data migrates in place; legacy public TLS records become direct mode, while legacy custom-CA records are disabled until a Connector is supplied. |
 | Resource Server | RFC 9728 discovery, OpenAPI, RFC 9068 claim checks, RFC 9449 DPoP/replay protection, RFC 8693 actor attribution, scopes, immutable audit, and Kubernetes-native status/errors are complete. |
 | Inventory | Enabled clusters reconcile to Cluster Inventory API v0.1.3 ClusterProfiles. Connector readiness/version are reflected without copying credentials into the profile. |
-| Kite | Cluster CRUD projects the catalog including Connector mode, current-user ID tokens reach the Kubernetes path, audit is visible, and Agent endpoints remain outside Kite. The production UI/backend build and full suites pass. |
-| Headlamp | The generic credentialless provider inherits deployment OIDC. Offline sessions request standards-compliant consent. Both changes are issuer/product neutral and covered by Headlamp tests; upstream merge remains external work. |
-| Runtime targets | Worker local D1 migration and runtime smoke pass; Worker deployment dry-run passes. Node/SQLite and Connector container images build; the Node image starts and passes readiness. |
-| kind/Toolbox | One Kubernetes v1.33.1 kind cluster verifies user UI resources/metrics, Agent discovery/read/write/denial/audit/watch, Connector status, and WebSocket exec. Temporary resources are removed. |
+| Built-in UI | React/Vite catalog and audit UI supports public PKCE login, loading/error/empty states, and Direct/Connector create/edit dialogs. |
+| Kite | Catalog calls use a resource-audience Access Token while Kubernetes calls use the same session's ID Token. Live Realmroot login, Overview resources/metrics, and audit passed through the public Worker and local Connector. |
+| Runtime targets | The Worker, D1 migrations, static UI, cron, and observability are deployed publicly. Node/SQLite and Connector container targets share the same control-plane domain and schema. |
+| kind/Toolbox | One Kubernetes v1.33.1 kind cluster verifies user UI reads, Agent discovery/read/write/denial/audit, Connector status, and ClusterProfile publication. Temporary CRUD resources are removed. |
 
 ## Deliberate product boundaries
 
@@ -49,15 +49,12 @@ manifests. Searches for the obsolete actor claims and embedded AI/Agent loop
 return no product code; Cloudflare generated ambient type declarations are not
 checked in.
 
-The local acceptance cluster retains only the old PVC as a recovery copy of
-the pre-migration audit database. The old process is stopped and no
-ClusterProfile or dashboard route points at it. Deleting that PVC is a separate
-data-retention decision, not a runtime dependency.
+The old control-plane process is stopped and no ClusterProfile or dashboard
+route points at it. Old namespace resources are removed after final regression;
+the requested kind cluster and new Connector remain for interactive review.
 
 ## External follow-up
 
-- Submit the two generic Headlamp changes upstream and track SIG Multicluster's
-  provider capability naming.
 - Replace the acceptance quick tunnel with a stable trusted HTTPS domain before
   production deployment.
 - Configure production D1/SQLite backup, dispatch-key rotation, observability,

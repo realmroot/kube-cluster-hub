@@ -48,19 +48,33 @@ export class UserVerifier {
     private readonly issuer: IssuerKeys,
     private readonly audience: string,
     private readonly groupsClaim: string,
+    private readonly tokenKind: 'id' | 'access' = 'id',
   ) {}
 
   async verify(authorization: string | undefined): Promise<UserPrincipal> {
     const token = bearerToken(authorization)
     try {
-      const { payload } = await jwtVerify(token, this.issuer.keys, {
-        issuer: this.issuer.issuer,
-        audience: this.audience,
-      })
+      const { payload, protectedHeader } = await jwtVerify(
+        token,
+        this.issuer.keys,
+        {
+          issuer: this.issuer.issuer,
+          audience: this.audience,
+        },
+      )
+      if (
+        this.tokenKind === 'access' &&
+        protectedHeader.typ?.toLowerCase() !== 'at+jwt'
+      ) {
+        throw new AuthenticationError(
+          'invalid_token',
+          'OAuth access token is required',
+        )
+      }
       if (!payload.sub)
         throw new AuthenticationError(
           'invalid_token',
-          'ID token subject is missing',
+          'token subject is missing',
         )
       const rawGroups = payload[this.groupsClaim]
       if (
@@ -70,20 +84,24 @@ export class UserVerifier {
       ) {
         throw new AuthenticationError(
           'invalid_token',
-          'ID token groups claim is invalid',
+          'token groups claim is invalid',
         )
       }
       return {
         type: 'user',
         subject: payload.sub,
         groups: (rawGroups as string[] | undefined) ?? [],
+        scopes:
+          typeof payload.scope === 'string'
+            ? payload.scope.split(/\s+/).filter(Boolean)
+            : [],
         token,
       }
     } catch (error) {
       if (error instanceof AuthenticationError) throw error
       throw new AuthenticationError(
         'invalid_token',
-        'ID token verification failed',
+        `${this.tokenKind === 'access' ? 'access' : 'ID'} token verification failed`,
       )
     }
   }
@@ -292,10 +310,7 @@ function dpopTarget(target: string): string {
 function bearerToken(value: string | undefined): string {
   const parts = value?.trim().split(/\s+/) ?? []
   if (parts.length !== 2 || parts[0]?.toLowerCase() !== 'bearer' || !parts[1]) {
-    throw new AuthenticationError(
-      'invalid_token',
-      'Bearer ID token is required',
-    )
+    throw new AuthenticationError('invalid_token', 'Bearer token is required')
   }
   return parts[1]
 }

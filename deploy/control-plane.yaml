@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: cluster-access-system
+  name: kube-cluster-hub-system
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: cluster-access-control-plane-data
-  namespace: cluster-access-system
+  name: kube-cluster-hub-data
+  namespace: kube-cluster-hub-system
 spec:
   accessModes: [ReadWriteOnce]
   resources:
@@ -17,13 +17,13 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: cluster-access-control-plane
-  namespace: cluster-access-system
+  name: kube-cluster-hub
+  namespace: kube-cluster-hub-system
 data:
-  GATEWAY_PUBLIC_URL: https://clusters.example.com
-  GATEWAY_INVENTORY_ACCESS_URL: https://clusters.example.com
+  HUB_PUBLIC_URL: https://clusters.example.com
+  HUB_INVENTORY_ACCESS_URL: https://clusters.example.com
   OIDC_ISSUER: https://identity.example.com
-  OIDC_AUDIENCE: kubernetes-client
+  KUBERNETES_OIDC_AUDIENCE: kubernetes-client
   OIDC_GROUPS_CLAIM: groups
   CATALOG_ADMIN_GROUPS: platform-admins
   RESOURCE_SERVER_URL: https://clusters.example.com/api/agent
@@ -31,42 +31,42 @@ data:
   RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS: authorized-toolbox-client
   RESOURCE_SERVER_JWT_ALGORITHMS: RS256
   DISPATCH_ISSUER: https://clusters.example.com
-  DISPATCH_AUDIENCE: cluster-access-connector
+  DISPATCH_AUDIENCE: kube-cluster-connector
   INVENTORY_CLUSTER_ID: management
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: cluster-access-control-plane
-  namespace: cluster-access-system
+  name: kube-cluster-hub
+  namespace: kube-cluster-hub-system
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: cluster-access-control-plane
+      app.kubernetes.io/name: kube-cluster-hub
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: cluster-access-control-plane
+        app.kubernetes.io/name: kube-cluster-hub
     spec:
       securityContext:
         runAsNonRoot: true
         fsGroup: 65532
       containers:
         - name: control-plane
-          image: cluster-access-control-plane:dev
+          image: kube-cluster-hub:dev
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
-                name: cluster-access-control-plane
+                name: kube-cluster-hub
             - secretRef:
-                name: cluster-access-control-plane-secrets
+                name: kube-cluster-hub-secrets
           env:
             - name: PORT
               value: "8080"
-            - name: GATEWAY_DATABASE_DSN
+            - name: HUB_DATABASE_DSN
               value: /data/control-plane.db
           ports:
             - name: http
@@ -88,16 +88,16 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: cluster-access-control-plane-data
+            claimName: kube-cluster-hub-data
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: cluster-access-control-plane
-  namespace: cluster-access-system
+  name: kube-cluster-hub
+  namespace: kube-cluster-hub-system
 spec:
   selector:
-    app.kubernetes.io/name: cluster-access-control-plane
+    app.kubernetes.io/name: kube-cluster-hub
   ports:
     - name: http
       port: 8080

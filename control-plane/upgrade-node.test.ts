@@ -62,6 +62,7 @@ describe('Node HTTP Upgrade proxy', () => {
       type: 'user',
       subject: 'user-1',
       groups: [],
+      scopes: ['clusters:read', 'clusters:write', 'audit-events:read'],
       token: 'user-id-token',
     }
     const readOnlyAgent: AgentPrincipal = {
@@ -80,7 +81,8 @@ describe('Node HTTP Upgrade proxy', () => {
     const dependencies: AppDependencies = {
       config,
       store,
-      users: { verify: async () => user },
+      catalogUsers: { verify: async () => user },
+      kubernetesUsers: { verify: async () => user },
       agents: { verify: async () => readOnlyAgent },
       proxy: { signer, fetch },
       inventory: {
@@ -141,9 +143,10 @@ async function testConfig(): Promise<{ config: Config; publicKey: CryptoKey }> {
   return {
     publicKey: pair.publicKey,
     config: loadConfig({
-      GATEWAY_PUBLIC_URL: 'http://127.0.0.1:8080',
+      HUB_PUBLIC_URL: 'http://127.0.0.1:8080',
+      HUB_UI_CLIENT_ID: 'kubernetes-client',
       OIDC_ISSUER: 'https://identity.example.test',
-      OIDC_AUDIENCE: 'kubernetes-client',
+      KUBERNETES_OIDC_AUDIENCE: 'kubernetes-client',
       CATALOG_ADMIN_GROUPS: 'platform-admins',
       RESOURCE_SERVER_ISSUER: 'https://identity.example.test',
       RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS: 'authorized-toolbox-client',

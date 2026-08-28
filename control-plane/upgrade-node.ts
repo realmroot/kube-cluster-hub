@@ -123,7 +123,7 @@ async function prepareUpgrade(
     if (!principal.scopes.includes(requiredScope))
       throw new UpgradeRequestError(403, `${requiredScope} is required`)
   } else {
-    principal = await runtime.dependencies.users.verify(
+    principal = await runtime.dependencies.kubernetesUsers.verify(
       request.headers.authorization,
     )
   }

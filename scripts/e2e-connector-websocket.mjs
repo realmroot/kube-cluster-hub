@@ -22,7 +22,7 @@ const dispatch = await new SignJWT({
 })
   .setProtectedHeader({ alg: 'ES256', typ: 'cag-dispatch+jwt', kid: privateJwk.kid })
   .setIssuer(process.env.DISPATCH_ISSUER)
-  .setAudience(process.env.DISPATCH_AUDIENCE || 'cluster-access-connector')
+  .setAudience(process.env.DISPATCH_AUDIENCE || 'kube-cluster-connector')
   .setIssuedAt()
   .setExpirationTime('30s')
   .setJti(crypto.randomUUID())

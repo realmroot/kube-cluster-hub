@@ -2,122 +2,65 @@
 
 Date: 2026-08-28 (America/Toronto)
 
-## Environment
+## Accepted topology
 
-- one kind cluster: `kite-realmroot-demo`
-- Kubernetes v1.33.1 with AuthenticationConfiguration OIDC
-- metrics-server returning Pod and Node metrics
-- sample workload: `realmroot-demo/hello-realmroot`
-- Cluster Inventory API v0.1.3
-- TypeScript control plane: Node/SQLite on `localhost:18081`
-- Go Connector: `cluster-access-system/cluster-access-connector`, forwarded to
-  `localhost:18082` for the local control plane
-- Kite production build: `http://localhost:8080`
-- Headlamp 0.45.0 local build: `http://localhost:4466`
-- online OIDC/Agent issuer: `https://id.realmroot.dev/api/auth`
-- public Resource Server exposed through an ephemeral Cloudflare quick tunnel
+- Public control plane: `https://kube-cluster-hub.saltbo.workers.dev`
+- Runtime: Cloudflare Worker, static React/Vite assets, and D1
+- Local cluster: kind `kite-realmroot-demo`, Kubernetes v1.33.1
+- Data plane: `kube-cluster-hub-system/kube-cluster-connector` 0.2.0
+- Local-to-public route: ephemeral Cloudflare quick tunnel
+- Dashboard: Kite production build at `http://localhost:8080`
+- Identity and Agent authority: Realmroot `https://id.realmroot.dev/api/auth`
+- Cluster Inventory API: v0.1.3
 
-The tunnel is acceptance infrastructure only. Production requires a stable
-trusted HTTPS route.
+The quick-tunnel hostname is acceptance infrastructure only. Production requires a stable trusted HTTPS route.
 
-## Control Plane and Connector
+## Control plane and UI
 
-- SQLite schema bootstrapped and retained catalog/audit data across restarts.
-- D1 migration `0001_control_plane.sql` applied to local Wrangler D1; Worker
-  health, readiness, RFC 9728 metadata, and OpenAPI discovery returned expected
-  responses.
-- Worker deployment dry run and Node/Connector container builds passed.
-- The Node image was started with a clean mounted SQLite database and returned
-  204 from health/readiness.
-- Connector heartbeat reported ready with Kubernetes v1.33.1.
-- ClusterProfile reconciliation changed from the old service to the public
-  control-plane URL, then remained at the same resourceVersion and
-  `lastTransitionTime` across subsequent reconciliation intervals.
-- The old monolithic Deployment, Service, ServiceAccount, and RBAC were removed.
-  Its PVC remains only as an explicit recovery copy.
+- D1 migrations applied successfully and the final Worker deployed as version `9fe3607c-a6e7-481c-aba8-24ea245fdcef`.
+- `/healthz`, `/readyz`, the React UI, security headers, RFC 9728 metadata, and both OpenAPI documents returned successfully.
+- The built-in UI rendered its Realmroot sign-in, cluster catalog, create/edit dialog, Connector/direct modes, and audit page.
+- The Worker cron reconciled `local-kind` to `inventoryStatus=ready` and published `cluster-inventory/local-kind` with `ControlPlaneHealthy=True` and the public Hub access URL.
+- Connector heartbeat reported `ready`, Kubernetes v1.33.1, and its declared capabilities into D1.
+
+## Identity boundary
+
+One public Authorization Code + PKCE client was used without a client secret.
+
+- The resource-indicator authorization produced an RFC 9068 Access Token with catalog audience, `clusters:read`, `clusters:write`, and `audit-events:read`; Kite used it only for catalog APIs.
+- The same authorization produced an ID Token with the shared Kubernetes client audience and `groups=[platform-admins]`; Kite used it only for Kubernetes requests.
+- The kind API server trusted the Realmroot issuer/client ID and mapped `sub` plus `groups`; `platform-admins` was bound through ordinary Kubernetes RBAC.
+- Neither token was exposed to Kite browser JavaScript. Kite retained both in its encrypted server-side session.
 
 ## Kite user journey
 
-- Live Realmroot Authorization Code + PKCE login succeeded without a client
-  secret.
-- Overview through the Connector showed one node, 14 Pods, nine namespaces,
-  six Services, events, and live CPU/memory metrics.
-- Settings showed `kind-realmroot` as Connector type.
-- Add Cluster exposed Direct and Connector modes. Connector mode generated a
-  stable read-only Connector ID and accepted only its HTTPS URL and optional
-  Prometheus metadata, without any token, kubeconfig, or Kubernetes CA field.
-- Settings > Audit displayed both human and Agent records with final status.
-
-## Headlamp user journey
-
-- The official Cluster Inventory integration discovers the generated
-  `kind-realmroot` ClusterProfile alongside Headlamp's in-cluster context.
-- The generic local patch creates a credentialless context which inherits the
-  deployment OIDC configuration; no exec plugin, kubeconfig, or stored token is
-  placed in the ClusterProfile.
-- The online authorization request now includes PKCE, shared public client
-  audience, groups, `offline_access`, and standards-compliant
-  `prompt=consent`.
-- Realmroot consent completed for all five scopes. Headlamp then loaded the
-  v1.33.1 overview, live CPU/memory metrics, the node, 13 healthy Pods, and all
-  workload types through the Gateway-backed ClusterProfile.
-- Headlamp's Create/Apply UI passed server-side dry run and created
-  `realmroot-demo/headlamp-ui-final-e2e`; Gateway audit recorded both POSTs as
-  the human Realmroot subject with status 201. The ConfigMap was verified and
-  removed immediately.
-- The local acceptance origin must be `http://localhost:4466`, matching the
-  registered OIDC callback. Using `127.0.0.1` creates a different localStorage
-  origin and leaves Headlamp's popup completion signal isolated.
+- Live Realmroot login completed and the Hub catalog returned `Local kind`.
+- Kite Overview loaded through Worker → quick tunnel → Connector → kube-apiserver.
+- The rendered page showed one Node, 14 Pods, 10 Namespaces, six Services, recent Events, and CPU/memory capacity data.
+- D1 audit contained the human Realmroot subject, cluster, method, canonical Kubernetes path, status 200, request ID, and duration for those calls.
+- Native Kubernetes discovery and unavailable API groups retained Kubernetes status behavior; the Hub did not synthesize dashboard-specific resource APIs.
 
 ## Realmroot Agent Toolbox
 
-Using the stable Agent identity and controller-approved `cluster-access`
-authority:
+The stable Agent identity obtained controller-approved authority for `clusters:read`, `kubernetes:read`, `kubernetes:write`, and `audit-events:read`.
 
-- Resource Server overview discovered exactly seven OpenAPI operations and the
-  four admission scopes, with no proprietary Agent Skills warning.
-- cluster listing returned `kind-realmroot` in Connector mode;
-- Kubernetes `/version` returned v1.33.1;
-- Pod reads and a two-second watch returned a streamed `ADDED` event;
-- ConfigMap `realmroot-demo/connector-final-e2e` was created, read, and deleted;
-  `kubectl` then verified NotFound;
-- the same create in `default` returned native Kubernetes 403 for
-  `cluster-access:agent`;
-- audit reads contained Agent issuer/subject, controller subject, authorized
-  client, scopes, token ID, request ID, operation, status, and duration;
-- a real Kubernetes exec WebSocket returned `connector-websocket-ok` through
-  the Connector.
-- Connector rollout with `DISPATCH_SIGNING_PUBLIC_JWKS` repeated the exec and
-  CRUD/RBAC checks successfully; legacy single-JWK fallback remains migration
-  compatibility only.
-- multi-page audit traversal followed canonical HTTPS links through the public
-  Resource Server without trusting the reverse proxy's internal request URL.
-
-## Security and failure paths
-
-- missing/invalid user token: 401;
-- missing catalog API version: 400 RFC 9457 problem;
-- non-admin catalog mutation: 403;
-- invalid/expired/replayed DPoP proof: 401, with durable replay storage;
-- read-only Agent write: 403 and audited;
-- Agent write outside bound namespace: native Kubernetes 403;
-- disabled cluster: 503; unknown cluster: 404;
-- unreachable upstream: 502 without credential leakage;
-- cancelled stream: audit status 499;
-- caller authorization, cookie, DPoP, and impersonation headers are stripped;
-- encoded OpenAPI Kubernetes paths are decoded once and traversal is rejected;
-- the external Agent access token never crosses the Connector boundary.
+- RFC 9728 and OpenAPI discovery generated seven Toolbox operations.
+- Cluster listing returned `local-kind` in Connector mode.
+- A Pod list in `realmroot-demo` succeeded as impersonated user `kube-cluster-hub:agent` with the read group.
+- ConfigMap `realmroot-demo/hub-agent-e2e` was created, read, and deleted through Toolbox; Kubernetes returned 201/200/200 and the object was removed immediately.
+- The initial read before installing the new RBAC example returned native Kubernetes 403 and was audited, proving that OAuth scope alone does not bypass Kubernetes RBAC.
+- Agent audit rows contain actor issuer/subject, controller subject, client ID, scopes, token ID, request ID, cluster, path, status, and duration.
 
 ## Automated regression
 
-- Gateway: Biome, TypeScript strict check, 13 Vitest tests, Go vet, race-enabled
-  Connector tests, Node build, Worker dry run, two container builds, D1 local
-  migration/runtime smoke, real watch, CRUD/RBAC, and WebSocket exec.
-- Kite: 475 Go tests, 67 UI tests in 21 files, full UI typecheck/lint/format,
-  architecture/deployment/Kubernetes/AI-removal verifiers, and production build.
-- Headlamp: 1,353 Go tests in 17 packages, targeted OIDC handler regression,
-  and complete local image build.
+- `make verify` passed: Biome, TypeScript strict check, all tests, Go vet/race, and all production builds.
+- Six Vitest files with 15 tests passed.
+- Worker/D1 runtime test passed under workerd.
+- React, Worker, Node/SQLite, and Go production builds passed.
+- Both Dockerfiles built successfully as `kube-cluster-hub:acceptance` and `kube-cluster-connector:acceptance`.
+- Focused Kite auth, middleware, cluster, scheduler, and resources packages passed after separating catalog Access Token and Kubernetes ID Token handling.
+- Connector image built, loaded into kind, rolled out, and stayed ready.
 
-No temporary E2E Kubernetes resource remains. The one kind cluster, Connector,
-control plane, Kite, Headlamp, metrics-server, and sample workload remain
-running for interactive review.
+## Runtime state left for review
+
+One requested kind cluster remains running with the new Connector. Kite remains at `http://localhost:8080`. The port-forward and ephemeral tunnel processes must remain alive for interactive review and are not production dependencies. No temporary Agent CRUD object remains.

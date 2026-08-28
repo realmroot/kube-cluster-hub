@@ -1,10 +1,11 @@
 import type { JWK } from 'jose'
 
 export interface ConfigSource {
-  GATEWAY_PUBLIC_URL?: string
-  GATEWAY_INVENTORY_ACCESS_URL?: string
+  HUB_PUBLIC_URL?: string
+  HUB_INVENTORY_ACCESS_URL?: string
+  HUB_UI_CLIENT_ID?: string
   OIDC_ISSUER?: string
-  OIDC_AUDIENCE?: string
+  KUBERNETES_OIDC_AUDIENCE?: string
   OIDC_GROUPS_CLAIM?: string
   CATALOG_ADMIN_GROUPS?: string
   RESOURCE_SERVER_URL?: string
@@ -25,6 +26,7 @@ export interface Config {
   publicUrl: string
   catalogUrl: string
   inventoryAccessUrl: string
+  uiClientId: string
   oidcIssuer: string
   oidcAudience: string
   oidcGroupsClaim: string
@@ -45,8 +47,8 @@ export interface Config {
 
 export function loadConfig(source: ConfigSource): Config {
   const publicUrl = absoluteUrl(
-    required(source.GATEWAY_PUBLIC_URL, 'GATEWAY_PUBLIC_URL'),
-    'GATEWAY_PUBLIC_URL',
+    required(source.HUB_PUBLIC_URL, 'HUB_PUBLIC_URL'),
+    'HUB_PUBLIC_URL',
   )
   const resourceUrl = absoluteUrl(
     source.RESOURCE_SERVER_URL || `${publicUrl}/api/agent`,
@@ -63,14 +65,18 @@ export function loadConfig(source: ConfigSource): Config {
     publicUrl,
     catalogUrl: `${publicUrl}/api/catalog`,
     inventoryAccessUrl: absoluteUrl(
-      source.GATEWAY_INVENTORY_ACCESS_URL || publicUrl,
-      'GATEWAY_INVENTORY_ACCESS_URL',
+      source.HUB_INVENTORY_ACCESS_URL || publicUrl,
+      'HUB_INVENTORY_ACCESS_URL',
     ),
+    uiClientId: required(source.HUB_UI_CLIENT_ID, 'HUB_UI_CLIENT_ID'),
     oidcIssuer: absoluteUrl(
       required(source.OIDC_ISSUER, 'OIDC_ISSUER'),
       'OIDC_ISSUER',
     ),
-    oidcAudience: required(source.OIDC_AUDIENCE, 'OIDC_AUDIENCE'),
+    oidcAudience: required(
+      source.KUBERNETES_OIDC_AUDIENCE,
+      'KUBERNETES_OIDC_AUDIENCE',
+    ),
     oidcGroupsClaim: source.OIDC_GROUPS_CLAIM?.trim() || 'groups',
     catalogAdminGroups: nonEmptySet(
       source.CATALOG_ADMIN_GROUPS,
@@ -90,17 +96,17 @@ export function loadConfig(source: ConfigSource): Config {
     ),
     agentReadGroup:
       source.KUBERNETES_AGENT_READ_GROUP?.trim() ||
-      'cluster-access:agents:read',
+      'kube-cluster-hub:agents:read',
     agentWriteGroup:
       source.KUBERNETES_AGENT_WRITE_GROUP?.trim() ||
-      'cluster-access:agents:write',
+      'kube-cluster-hub:agents:write',
     dispatchPrivateJwk,
     dispatchIssuer: absoluteUrl(
       source.DISPATCH_ISSUER || publicUrl,
       'DISPATCH_ISSUER',
     ),
     dispatchAudience:
-      source.DISPATCH_AUDIENCE?.trim() || 'cluster-access-connector',
+      source.DISPATCH_AUDIENCE?.trim() || 'kube-cluster-hub-connector',
     connectorStatusToken: required(
       source.CONNECTOR_STATUS_TOKEN,
       'CONNECTOR_STATUS_TOKEN',

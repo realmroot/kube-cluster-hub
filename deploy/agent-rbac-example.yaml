@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: cluster-access-agent-read
+  name: kube-cluster-hub-agent-read
   namespace: realmroot-demo
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -9,13 +9,13 @@ roleRef:
   name: view
 subjects:
   - kind: Group
-    name: cluster-access:agents:read
+    name: kube-cluster-hub:agents:read
     apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: cluster-access-agent-write
+  name: kube-cluster-hub-agent-write
   namespace: realmroot-demo
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -23,6 +23,5 @@ roleRef:
   name: edit
 subjects:
   - kind: Group
-    name: cluster-access:agents:write
+    name: kube-cluster-hub:agents:write
     apiGroup: rbac.authorization.k8s.io
-
