@@ -1,6 +1,7 @@
 import { bootstrap, type IdentityRuntime, prepareIdentity } from './bootstrap'
 import { type ConfigSource, loadConfig } from './config'
 import { D1DatabaseAdapter } from './database-d1'
+import { isFrontendNavigation, serveFrontend } from './frontend'
 
 type WorkerEnv = Cloudflare.Env
 
@@ -38,7 +39,7 @@ export default {
       )
       const response = await runtime.app.fetch(request, env, ctx)
       if (response.status === 404 && isFrontendNavigation(request)) {
-        return withSecurityHeaders(await env.ASSETS.fetch(request))
+        return withSecurityHeaders(await serveFrontend(request, env.ASSETS))
       }
       return withSecurityHeaders(response)
     } catch (error) {
@@ -81,19 +82,6 @@ export default {
     )
   },
 } satisfies ExportedHandler<WorkerEnv>
-
-function isFrontendNavigation(request: Request): boolean {
-  if (request.method !== 'GET') return false
-  const path = new URL(request.url).pathname
-  return ![
-    '/api/',
-    '/clusters/',
-    '/openapi/',
-    '/.well-known/',
-    '/healthz',
-    '/readyz',
-  ].some((prefix) => path === prefix || path.startsWith(prefix))
-}
 
 function withSecurityHeaders(response: Response): Response {
   const secured = new Response(response.body, response)
