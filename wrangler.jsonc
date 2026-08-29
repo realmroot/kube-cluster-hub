@@ -20,7 +20,9 @@
     "CATALOG_ADMIN_GROUPS": "platform-admins",
     "RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS": "realmroot-cli",
     "RESOURCE_SERVER_JWT_ALGORITHMS": "RS256",
-    "AUDIT_RETENTION": "2160h"
+    "AUDIT_RETENTION": "2160h",
+    "INVENTORY_ENABLED": "true",
+    "INVENTORY_NAMESPACE": "cluster-inventory"
   },
   "assets": {
     "binding": "ASSETS",
@@ -34,5 +36,5 @@
       "migrations_dir": "migrations"
     }
   ],
-  "triggers": { "crons": ["0 0 * * *"] }
+  "triggers": { "crons": ["*/5 * * * *"] }
 }

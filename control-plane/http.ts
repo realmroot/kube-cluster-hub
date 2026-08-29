@@ -11,6 +11,7 @@ import {
   type UserPrincipal,
   ValidationError,
 } from './domain'
+import { InventoryPublicationError } from './inventory'
 
 export type HubContext = Context<{ Variables: Variables }>
 
@@ -66,6 +67,14 @@ export function installHttpBoundary(
         error.status,
         'upstream-unavailable',
         'Upstream unavailable',
+        error.message,
+      )
+    if (error instanceof InventoryPublicationError)
+      return problem(
+        context,
+        503,
+        'inventory-publication-pending',
+        'Inventory publication pending',
         error.message,
       )
     console.error(

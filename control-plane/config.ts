@@ -8,6 +8,10 @@ export interface ConfigSource {
   RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS?: string
   RESOURCE_SERVER_JWT_ALGORITHMS?: string
   AUDIT_RETENTION?: string
+  INVENTORY_ENABLED?: string
+  INVENTORY_NAMESPACE?: string
+  INVENTORY_KUBECONFIG?: string
+  INVENTORY_KUBECONFIG_FILE?: string
 }
 
 export interface Config {
@@ -21,6 +25,12 @@ export interface Config {
   agentAuthorizedClients: ReadonlySet<string>
   agentSigningAlgorithms: readonly string[]
   auditRetentionMs: number
+  inventory: {
+    enabled: boolean
+    namespace: string
+    kubeconfig: string
+    kubeconfigFile: string
+  }
 }
 
 export function loadConfig(source: ConfigSource): Config {
@@ -54,6 +64,12 @@ export function loadConfig(source: ConfigSource): Config {
       source.RESOURCE_SERVER_JWT_ALGORITHMS || 'RS256',
     ),
     auditRetentionMs,
+    inventory: {
+      enabled: source.INVENTORY_ENABLED?.trim() === 'true',
+      namespace: source.INVENTORY_NAMESPACE?.trim() || 'cluster-inventory',
+      kubeconfig: source.INVENTORY_KUBECONFIG?.trim() || '',
+      kubeconfigFile: source.INVENTORY_KUBECONFIG_FILE?.trim() || '',
+    },
   }
 }
 

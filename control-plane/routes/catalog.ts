@@ -12,6 +12,7 @@ import {
   requireAgentScope,
   requireUserScope,
 } from '../http'
+import { InventoryPublicationError } from '../inventory'
 import { auditForAgent, verifyAgent } from './access'
 import { auditPage, clusterPage } from './pages'
 
@@ -65,6 +66,11 @@ export function registerCatalogRoutes(
             input,
             parseEtag(context.req.header('If-Match')),
           )
+    try {
+      await dependencies.inventory?.publish(cluster)
+    } catch (error) {
+      throw new InventoryPublicationError(error)
+    }
     context.header('ETag', etag(cluster.resourceVersion))
     return context.json(cluster, ifNoneMatch === '*' ? 201 : 200)
   })
@@ -78,6 +84,11 @@ export function registerCatalogRoutes(
       id,
       parseEtag(context.req.header('If-Match')),
     )
+    try {
+      await dependencies.inventory?.remove(id)
+    } catch (error) {
+      throw new InventoryPublicationError(error)
+    }
     return context.body(null, 204)
   })
 

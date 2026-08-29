@@ -13,8 +13,12 @@
 | `RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS` | Toolbox/controller OAuth client allow-list |
 | `RESOURCE_SERVER_JWT_ALGORITHMS` | accepted access-token algorithms, default `RS256` |
 | `AUDIT_RETENTION` | retention duration, default `2160h` |
+| `INVENTORY_ENABLED` | publish catalog entries as Cluster Inventory `ClusterProfile` resources |
+| `INVENTORY_NAMESPACE` | Inventory namespace, default `cluster-inventory` |
+| `INVENTORY_KUBECONFIG` | optional inline kubeconfig; required by Worker when Inventory is enabled |
+| `INVENTORY_KUBECONFIG_FILE` | optional kubeconfig path for Node deployments |
 
-There is no OIDC client secret: the web client uses Authorization Code + PKCE. There is no Hub signing key, Kubernetes credential, Connector token, or inventory credential.
+There is no OIDC client secret: the web client uses Authorization Code + PKCE. There is no Hub signing key, target-cluster credential, or Connector token. Inventory publication, when enabled, needs only a deployment secret authorized to manage `ClusterProfile` resources in the configured namespace.
 
 The sole Hub protected-resource URL is derived as `${HUB_PUBLIC_URL}/api`; it is the RFC 8707 resource indicator and token audience for both browser catalog access and Agent access. `OIDC_ISSUER` is the only accepted authorization-server issuer. Kubernetes browser requests continue to use `KUBERNETES_OIDC_AUDIENCE` because they are authenticated by kube-apiserver rather than the Hub API.
 
@@ -30,6 +34,12 @@ pnpm deploy
 
 The daily cron prunes audit events. Workers must be able to reach every catalog `apiServerUrl`; use a publicly trusted endpoint, private network integration, or a standard tunnel. The network path must preserve chunked/streaming responses and WebSocket upgrades. Validate this explicitly with Kubernetes watch, `pods/log?follow=true`, exec, attach, and port-forward; basic request/response reachability is insufficient.
 
+Worker Inventory publication accepts a kubeconfig containing a bearer token and
+a publicly trusted HTTPS server. Cloudflare Workers cannot apply kubeconfig
+client certificates, custom CA files/data, insecure TLS, exec plugins, or auth
+providers. Store the kubeconfig with `wrangler secret put
+INVENTORY_KUBECONFIG`; do not place it in `wrangler.jsonc`.
+
 ## Node and Docker
 
 For development, `HUB_DATABASE_DSN` selects a local SQLite file. For production, set `HUB_DATABASE_URL` to PostgreSQL. The Node process applies ordered PostgreSQL migrations before it starts listening.
@@ -42,6 +52,12 @@ docker run --rm -p 8080:8080 --env-file .env kube-cluster-hub
 All replicas are identical and stateless with PostgreSQL. Route normal HTTP and WebSocket Upgrade traffic to them using any HTTP load balancer. Graceful shutdown stops accepting traffic and closes the database pool.
 
 The reference Kubernetes manifest starts two replicas and expects a Secret named `kube-cluster-hub-secrets` containing `HUB_DATABASE_URL`. Use a managed PostgreSQL database or an independently operated HA PostgreSQL cluster; do not mount one SQLite file into multiple Pods.
+
+Node uses the official Kubernetes JavaScript client for Inventory publication.
+It loads `INVENTORY_KUBECONFIG`, then `INVENTORY_KUBECONFIG_FILE`, or finally
+the in-cluster ServiceAccount. The reference Role permits only get/list/watch,
+create/update/patch/delete of `ClusterProfile` resources and status in the
+configured namespace.
 
 ## Kubernetes OIDC and RBAC
 

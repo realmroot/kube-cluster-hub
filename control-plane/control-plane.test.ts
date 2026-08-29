@@ -199,6 +199,31 @@ describe('combined control plane and data plane', () => {
     expect(stale.status).toBe(412)
   })
 
+  it('reports a retryable Inventory publication failure after storing the catalog change', async () => {
+    dependencies.inventory = {
+      publish: async () => {
+        throw new Error('inventory unavailable')
+      },
+      remove: async () => undefined,
+      reconcile: async () => undefined,
+    }
+    const response = await createApp(dependencies).request(
+      '/api/clusters/development',
+      {
+        method: 'PUT',
+        headers: catalogHeaders({ 'If-None-Match': '*' }),
+        body: JSON.stringify(clusterInput()),
+      },
+    )
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({
+      type: 'https://kube-cluster-hub.dev/problems/inventory-publication-pending',
+      status: 503,
+    })
+    expect((await store.getCluster('development')).id).toBe('development')
+  })
+
   it('forwards a user token directly to the Kubernetes API', async () => {
     await store.createCluster(
       'development',

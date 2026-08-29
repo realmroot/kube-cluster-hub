@@ -2,6 +2,7 @@ import type { Hono } from 'hono'
 import type { ProxyDependencies } from '../data-plane/proxy'
 import type { AgentVerifier, UserVerifier } from './auth'
 import type { Config } from './config'
+import type { InventoryPublisher } from './inventory'
 import type { HubStore } from './store'
 
 export interface Variables {
@@ -17,4 +18,5 @@ export interface AppDependencies {
   kubernetesUsers: Pick<UserVerifier, 'verify'>
   agents: Pick<AgentVerifier, 'verify'>
   proxy: ProxyDependencies
+  inventory?: Pick<InventoryPublisher, 'publish' | 'remove' | 'reconcile'>
 }

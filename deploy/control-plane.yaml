@@ -4,6 +4,44 @@ metadata:
   name: kube-cluster-hub-system
 ---
 apiVersion: v1
+kind: Namespace
+metadata:
+  name: cluster-inventory
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-cluster-hub
+  namespace: kube-cluster-hub-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kube-cluster-hub-inventory-publisher
+  namespace: cluster-inventory
+rules:
+  - apiGroups: ["multicluster.x-k8s.io"]
+    resources: ["clusterprofiles"]
+    verbs: ["get", "list", "create", "patch", "delete"]
+  - apiGroups: ["multicluster.x-k8s.io"]
+    resources: ["clusterprofiles/status"]
+    verbs: ["get", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kube-cluster-hub-inventory-publisher
+  namespace: cluster-inventory
+subjects:
+  - kind: ServiceAccount
+    name: kube-cluster-hub
+    namespace: kube-cluster-hub-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kube-cluster-hub-inventory-publisher
+---
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: kube-cluster-hub
@@ -18,6 +56,8 @@ data:
   RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS: authorized-toolbox-client
   RESOURCE_SERVER_JWT_ALGORITHMS: RS256
   AUDIT_RETENTION: 2160h
+  INVENTORY_ENABLED: "true"
+  INVENTORY_NAMESPACE: cluster-inventory
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -38,6 +78,7 @@ spec:
       labels:
         app.kubernetes.io/name: kube-cluster-hub
     spec:
+      serviceAccountName: kube-cluster-hub
       terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true

@@ -10,6 +10,7 @@ The Hub has a logical control plane and data plane but one deployment unit. Ever
 Realmroot OIDC ───────┤ authentication / authorization  │
 Kite / browser ───────┤ cluster catalog                 ├── reachable kube-apiserver
 Realmroot Toolbox ────┤ Agent resource server + audit   │
+Cluster Inventory API <┤ optional ClusterProfile publisher│
                       ┤ streaming Kubernetes proxy      │
                       └──────────────┬──────────────────┘
                                      │
@@ -65,6 +66,19 @@ Hub scopes are a resource-server boundary, not a replacement for Kubernetes RBAC
 
 API-server networking and load balancing are external concerns. Standard private networking, Cloudflare Tunnel, Connect, VPNs, or managed Kubernetes endpoints all work without a Hub-specific component.
 
+## Cluster Inventory projection
+
+When enabled, the control plane publishes each enabled catalog entry as a
+`multicluster.x-k8s.io/v1alpha1` `ClusterProfile`. Its access provider points to
+the Hub's Kubernetes-compatible proxy URL. Kite and other consumers watch the
+Inventory API rather than depending on the Hub's private catalog REST API.
+
+Catalog writes publish synchronously, while a five-minute reconciliation repairs
+transient failures, disabled entries, and orphaned managed profiles. The
+publisher credential is restricted to `ClusterProfile` resources in one
+namespace. It never authorizes access to a target cluster and is never forwarded
+through the data plane.
+
 ## Removed architecture
 
-The retired Connector, ServiceAccount impersonation, dispatch JWT, Connector heartbeat, ClusterProfile publisher, and system inventory credential are removed. They created another trust protocol and another availability boundary without being necessary when the Hub can reach the API server and forward the Realmroot credential directly.
+The retired Connector, ServiceAccount impersonation, dispatch JWT, and Connector heartbeat are removed. They created another trust protocol and availability boundary without being necessary when the Hub can reach the API server and forward the Realmroot credential directly. The Inventory publisher is only a standards-based catalog projection and is not a target-cluster connector or execution credential.

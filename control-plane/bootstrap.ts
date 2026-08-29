@@ -3,6 +3,8 @@ import { AgentVerifier, discoverIssuer, UserVerifier } from './auth'
 import type { Config, ConfigSource } from './config'
 import { loadConfig } from './config'
 import type { DatabaseAdapter } from './database'
+import type { InventoryKubernetesClient } from './inventory'
+import { InventoryPublisher } from './inventory'
 import { type HubStore, Store } from './store'
 
 export interface IdentityRuntime {
@@ -27,6 +29,7 @@ export async function bootstrap(
   source: ConfigSource,
   fetcher = fetch,
   preparedIdentity?: IdentityRuntime,
+  inventoryClient?: InventoryKubernetesClient,
 ): Promise<Runtime> {
   const config = loadConfig(source)
   const store = database.createStore?.() ?? new Store(requiredOrm(database))
@@ -55,6 +58,9 @@ export async function bootstrap(
       store,
     ),
     proxy,
+    ...(inventoryClient
+      ? { inventory: new InventoryPublisher(config, store, inventoryClient) }
+      : {}),
   }
   const app = createApp(dependencies)
   return { config, store, app, dependencies }

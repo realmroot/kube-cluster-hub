@@ -14,8 +14,9 @@ The control-plane routes and Kubernetes data-plane proxy are separate TypeScript
 - HTTP streaming and Node WebSocket upgrades for Kubernetes subresources
 - one React/Vite administration UI
 - horizontally scalable Cloudflare Worker/D1 and Node/PostgreSQL deployments
+- optional publication of the catalog as standard Cluster Inventory `ClusterProfile` resources
 
-It deliberately does not provide a Connector, dispatch-token protocol, Kubernetes credentials, an informer layer, or an additional RBAC database.
+It deliberately does not provide a Connector, dispatch-token protocol, a target-cluster credential, an informer layer, or an additional RBAC database. The optional Inventory publisher uses a deployment-scoped, read/write credential only for `ClusterProfile` resources in one inventory namespace.
 
 ## Architecture
 
@@ -24,6 +25,8 @@ Kite / browser ─┐
 Realmroot Agent ├─> Kube Cluster Hub ─> reachable kube-apiserver
 catalog client ─┘       │
                        D1 or PostgreSQL
+                           │
+                           └─> Cluster Inventory API ─> Kite / other dashboards
 ```
 
 Humans use a Hub-audience access token for catalog operations and a Realmroot ID token whose audience is the Kubernetes OIDC client for Kubernetes operations. Agents use a DPoP-bound Hub access token for both discovery and Kubernetes operations. The Hub verifies the applicable token boundary, strips untrusted forwarding and impersonation headers, and sends the Kubernetes credential as `Authorization: Bearer` to Kubernetes. The target kube-apiserver independently decides whether it accepts that token audience and applies RBAC. See [docs/architecture.md](docs/architecture.md).
@@ -55,6 +58,8 @@ pnpm deploy
 ```
 
 Node/Docker supports SQLite for one-process development and PostgreSQL for production replicas. Set `HUB_DATABASE_URL` to a PostgreSQL URL; every replica runs the same control-plane and data-plane code. The Kubernetes reference manifest expects that URL in the `kube-cluster-hub-secrets` Secret and starts two replicas.
+
+Set `INVENTORY_ENABLED=true` to project enabled catalog entries into an Inventory Kubernetes API. Node supports in-cluster credentials or a kubeconfig; Workers support a bearer-token kubeconfig to a publicly trusted HTTPS API endpoint. This integration is optional and does not change the Hub catalog or proxy protocol.
 
 See [docs/deployment.md](docs/deployment.md), [docs/protocol.md](docs/protocol.md), and [docs/implementation-status.md](docs/implementation-status.md).
 

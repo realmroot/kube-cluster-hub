@@ -2,6 +2,7 @@ import { bootstrap, type IdentityRuntime, prepareIdentity } from './bootstrap'
 import { type ConfigSource, loadConfig } from './config'
 import { D1DatabaseAdapter } from './database-d1'
 import { isFrontendNavigation, serveFrontend } from './frontend'
+import { WorkerInventoryKubernetesClient } from './inventory-worker'
 
 type WorkerEnv = Cloudflare.Env
 
@@ -36,6 +37,9 @@ export default {
         env satisfies ConfigSource,
         (input, init) => fetch(input, init),
         identity,
+        loadConfig(env).inventory.enabled
+          ? WorkerInventoryKubernetesClient.fromConfig(loadConfig(env))
+          : undefined,
       )
       const response = await runtime.app.fetch(request, env, ctx)
       if (response.status === 404 && isFrontendNavigation(request)) {
@@ -75,7 +79,11 @@ export default {
       env satisfies ConfigSource,
       (input, init) => fetch(input, init),
       identity,
+      loadConfig(env).inventory.enabled
+        ? WorkerInventoryKubernetesClient.fromConfig(loadConfig(env))
+        : undefined,
     )
+    await runtime.dependencies.inventory?.reconcile()
     await runtime.store.pruneAudit(
       new Date(Date.now() - runtime.config.auditRetentionMs),
     )
