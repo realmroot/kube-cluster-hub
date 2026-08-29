@@ -10,6 +10,7 @@ import {
   NotFoundError,
   type UserPrincipal,
 } from './domain'
+import { TokenExchangeError } from './token-exchange'
 
 interface PreparedUpgrade {
   target: string
@@ -17,6 +18,8 @@ interface PreparedUpgrade {
   principal: UserPrincipal | AgentPrincipal
   clusterId: string
   requestId: string
+  exchangeStatus: string
+  targetAudience: string
 }
 
 export function attachNodeUpgradeHandler(
@@ -38,6 +41,7 @@ async function handleUpgrade(
   let prepared: PreparedUpgrade | undefined
   try {
     prepared = await prepareUpgrade(request, runtime)
+    await prepareUpstreamAuthorization(prepared, runtime)
     const target = new URL(prepared.target)
     const makeRequest =
       target.protocol === 'https:' ? httpsRequest : httpRequest
@@ -131,7 +135,6 @@ async function prepareUpgrade(
   const cluster = await runtime.store.getCluster(clusterId)
   if (!cluster.enabled)
     throw new UpgradeRequestError(503, 'cluster is disabled')
-  headers.set('Authorization', `Bearer ${principal.token}`)
   headers.set('Request-Id', requestId)
   return {
     target: `${cluster.apiServerUrl}${uri}`,
@@ -139,7 +142,28 @@ async function prepareUpgrade(
     principal,
     clusterId,
     requestId,
+    exchangeStatus:
+      principal.type === 'agent' ? 'not_attempted' : 'not_applicable',
+    targetAudience:
+      principal.type === 'agent' ? runtime.config.oidcAudience : '',
   }
+}
+
+async function prepareUpstreamAuthorization(
+  prepared: PreparedUpgrade,
+  runtime: Runtime,
+): Promise<void> {
+  let token = prepared.principal.token
+  if (prepared.principal.type === 'agent') {
+    prepared.exchangeStatus = 'failed'
+    const exchanged = await runtime.dependencies.agentTokens.exchange(
+      prepared.principal,
+    )
+    token = exchanged.token
+    prepared.exchangeStatus = 'succeeded'
+    prepared.targetAudience = exchanged.targetAudience
+  }
+  prepared.headers.set('Authorization', `Bearer ${token}`)
 }
 
 function headersFromIncoming(request: IncomingMessage): Headers {
@@ -220,6 +244,8 @@ async function appendUpgradeAudit(
     path: new URL(request.url || '/', runtime.config.publicUrl).pathname,
     status,
     durationMillis: Date.now() - started,
+    exchangeStatus: prepared.exchangeStatus,
+    targetAudience: prepared.targetAudience,
   })
 }
 
@@ -236,5 +262,7 @@ function upgradeErrorStatus(error: unknown): number {
   if (error instanceof UpgradeRequestError) return error.status
   if (error instanceof NotFoundError) return 404
   if (error instanceof AuthenticationError) return 401
+  if (error instanceof TokenExchangeError)
+    return error.code === 'denied' ? 403 : 502
   return 500
 }

@@ -31,6 +31,8 @@ describe('combined control plane and data plane', () => {
       KUBERNETES_OIDC_AUDIENCE: 'kubernetes-client',
       CATALOG_ADMIN_GROUPS: 'platform-admins',
       RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS: 'authorized-toolbox-client',
+      TOKEN_EXCHANGE_CLIENT_ID: 'hub-token-exchanger',
+      TOKEN_EXCHANGE_CLIENT_SECRET: 'test-secret',
     })
     const user: UserPrincipal = {
       type: 'user',
@@ -53,6 +55,7 @@ describe('combined control plane and data plane', () => {
       scope: 'clusters:read kubernetes:read kubernetes:write audit-events:read',
       tokenId: 'token-1',
       token: 'agent-access-token',
+      expiresAt: Math.floor(Date.now() / 1_000) + 300,
     }
     dependencies = {
       config,
@@ -63,6 +66,13 @@ describe('combined control plane and data plane', () => {
       },
       kubernetesUsers: { verify: async () => user },
       agents: { verify: async () => agent },
+      agentTokens: {
+        exchange: async () => ({
+          token: 'kubernetes-id-token',
+          targetAudience: config.oidcAudience,
+          groups: ['platform-admins'],
+        }),
+      },
       proxy: {
         fetch: async (request) => {
           forwarded.push(new Request(request))
@@ -248,7 +258,7 @@ describe('combined control plane and data plane', () => {
     })
   })
 
-  it('forwards the Hub-audience Agent token directly for Kubernetes to validate', async () => {
+  it('exchanges Agent authority before forwarding to Kubernetes', async () => {
     await store.createCluster(
       'development',
       normalizeClusterInput(clusterInput()),
@@ -268,9 +278,13 @@ describe('combined control plane and data plane', () => {
       'https://kubernetes.example.test/api/v1/namespaces',
     )
     expect(forwarded[0]?.headers.get('Authorization')).toBe(
-      'Bearer agent-access-token',
+      'Bearer kubernetes-id-token',
     )
     expect(forwarded[0]?.headers.get('DPoP')).toBeNull()
+    expect((await store.listAuditEvents(undefined, 10))[0]).toMatchObject({
+      exchangeStatus: 'succeeded',
+      targetAudience: 'kubernetes-client',
+    })
   })
 
   it('preserves readable responses across the Node compression boundary', async () => {

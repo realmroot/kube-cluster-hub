@@ -90,7 +90,8 @@ export default {
   },
 } satisfies ExportedHandler<WorkerEnv>
 
-function withSecurityHeaders(response: Response): Response {
+export function withSecurityHeaders(response: Response): Response {
+  if (response.status === 101) return response
   const secured = new Response(response.body, response)
   secured.headers.set('X-Content-Type-Options', 'nosniff')
   secured.headers.set('Referrer-Policy', 'no-referrer')

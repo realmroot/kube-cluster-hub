@@ -2,13 +2,13 @@
 
 Kube Cluster Hub is a small cluster catalog and authenticated Kubernetes API gateway. It lets dashboards such as Kite and authorized Realmroot Agents discover clusters and access their APIs without storing kubeconfigs, ServiceAccount tokens, or a second authorization model.
 
-The control-plane routes and Kubernetes data-plane proxy are separate TypeScript modules, but they run in the same Worker or Node process and scale together. Network reachability is infrastructure: expose each API server to the Hub with a private network or a standard tunnel.
+The control-plane routes and Kubernetes data-plane proxy are separate TypeScript modules, but they run in the same Worker or Node process and scale together. Network reachability is deployment infrastructure: expose a reachable Kubernetes API endpoint to the Hub.
 
 ## What it provides
 
 - Realmroot OAuth 2.1/OIDC login with Authorization Code + PKCE
 - versioned cluster catalog CRUD and optimistic concurrency
-- user token passthrough to Kubernetes; Kubernetes RBAC remains authoritative
+- human Kubernetes ID-token passthrough and Agent RFC 8693 exchange; Kubernetes RBAC remains authoritative
 - one Hub Resource Server for human and DPoP-protected Agent access, with OpenAPI and RFC 9728 discovery
 - Agent-attributed audit events
 - HTTP streaming and Node WebSocket upgrades for Kubernetes subresources
@@ -29,7 +29,7 @@ catalog client ─┘       │
                            └─> Cluster Inventory API ─> Kite / other dashboards
 ```
 
-Humans use a Hub-audience access token for catalog operations and a Realmroot ID token whose audience is the Kubernetes OIDC client for Kubernetes operations. Agents use a DPoP-bound Hub access token for both discovery and Kubernetes operations. The Hub verifies the applicable token boundary, strips untrusted forwarding and impersonation headers, and sends the Kubernetes credential as `Authorization: Bearer` to Kubernetes. The target kube-apiserver independently decides whether it accepts that token audience and applies RBAC. See [docs/architecture.md](docs/architecture.md).
+Humans use a Hub-audience access token for catalog operations and a Realmroot ID token whose audience is the Kubernetes OIDC client for Kubernetes operations. Agents use a DPoP-bound Hub access token for Hub discovery and operations. The Hub verifies that boundary, exchanges the Agent token at Realmroot for a Kubernetes-audience ID token, strips untrusted forwarding and impersonation headers, and sends only the exchanged credential to Kubernetes. The target kube-apiserver validates it and applies RBAC. See [docs/architecture.md](docs/architecture.md).
 
 ## Local development
 

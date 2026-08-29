@@ -7,6 +7,8 @@ export interface ConfigSource {
   CATALOG_ADMIN_GROUPS?: string
   RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS?: string
   RESOURCE_SERVER_JWT_ALGORITHMS?: string
+  TOKEN_EXCHANGE_CLIENT_ID?: string
+  TOKEN_EXCHANGE_CLIENT_SECRET?: string
   AUDIT_RETENTION?: string
   INVENTORY_ENABLED?: string
   INVENTORY_NAMESPACE?: string
@@ -24,6 +26,8 @@ export interface Config {
   catalogAdminGroups: ReadonlySet<string>
   agentAuthorizedClients: ReadonlySet<string>
   agentSigningAlgorithms: readonly string[]
+  tokenExchangeClientId: string
+  tokenExchangeClientSecret: string
   auditRetentionMs: number
   inventory: {
     enabled: boolean
@@ -62,6 +66,14 @@ export function loadConfig(source: ConfigSource): Config {
     ),
     agentSigningAlgorithms: commaList(
       source.RESOURCE_SERVER_JWT_ALGORITHMS || 'RS256',
+    ),
+    tokenExchangeClientId: required(
+      source.TOKEN_EXCHANGE_CLIENT_ID,
+      'TOKEN_EXCHANGE_CLIENT_ID',
+    ),
+    tokenExchangeClientSecret: required(
+      source.TOKEN_EXCHANGE_CLIENT_SECRET,
+      'TOKEN_EXCHANGE_CLIENT_SECRET',
     ),
     auditRetentionMs,
     inventory: {

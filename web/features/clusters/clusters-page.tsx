@@ -11,13 +11,16 @@ import {
 import { useState } from 'react'
 import type { HubApi } from '../../shared/api'
 import type { Cluster, ClusterInput } from '../../shared/contracts'
+import { PaginationControls } from '../../shared/pagination-controls'
 import { ClusterDialog } from './cluster-dialog'
 
 export function ClustersPage({ api }: { api: HubApi }) {
   const client = useQueryClient()
+  const [pageTokens, setPageTokens] = useState([''])
+  const pageToken = pageTokens.at(-1) ?? ''
   const query = useQuery({
-    queryKey: ['clusters'],
-    queryFn: () => api.listClusters(),
+    queryKey: ['clusters', pageToken],
+    queryFn: () => api.listClusters(pageToken),
   })
   const [editing, setEditing] = useState<Cluster | null | undefined>(undefined)
   const [deleteTarget, setDeleteTarget] = useState<Cluster | null>(null)
@@ -26,6 +29,7 @@ export function ClustersPage({ api }: { api: HubApi }) {
       api.saveCluster(id, input, editing?.resourceVersion),
     onSuccess: async () => {
       setEditing(undefined)
+      setPageTokens([''])
       await client.invalidateQueries({ queryKey: ['clusters'] })
     },
   })
@@ -33,6 +37,7 @@ export function ClustersPage({ api }: { api: HubApi }) {
     mutationFn: (cluster: Cluster) => api.deleteCluster(cluster),
     onSuccess: async () => {
       setDeleteTarget(null)
+      setPageTokens([''])
       await client.invalidateQueries({ queryKey: ['clusters'] })
     },
   })
@@ -149,6 +154,15 @@ export function ClustersPage({ api }: { api: HubApi }) {
               ))}
             </tbody>
           </table>
+          <PaginationControls
+            page={pageTokens.length}
+            hasNext={!!query.data?.pagination.nextPageToken}
+            previous={() => setPageTokens((tokens) => tokens.slice(0, -1))}
+            next={() => {
+              const token = query.data?.pagination.nextPageToken
+              if (token) setPageTokens((tokens) => [...tokens, token])
+            }}
+          />
         </div>
       )}
       <ClusterDialog

@@ -22,11 +22,14 @@ export class HubApi {
     private readonly token: string,
   ) {}
 
-  listClusters() {
-    return this.request('/clusters', pageSchema(clusterSchema))
+  listClusters(pageToken = '') {
+    return this.request(page('/clusters', pageToken), pageSchema(clusterSchema))
   }
-  listAuditEvents() {
-    return this.request('/audit-events', pageSchema(auditEventSchema))
+  listAuditEvents(pageToken = '') {
+    return this.request(
+      page('/audit-events', pageToken),
+      pageSchema(auditEventSchema),
+    )
   }
   async saveCluster(id: string, input: ClusterInput, version?: number) {
     return this.request(`/clusters/${encodeURIComponent(id)}`, clusterSchema, {
@@ -71,4 +74,10 @@ export class HubApi {
     if (!schema) return undefined as T
     return schema.parse(await response.json())
   }
+}
+
+function page(path: string, pageToken: string): string {
+  const query = new URLSearchParams({ pageSize: '50' })
+  if (pageToken) query.set('pageToken', pageToken)
+  return `${path}?${query}`
 }

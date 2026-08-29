@@ -32,7 +32,7 @@ Path: `/api/clusters/{clusterId}/kubernetes/{kubernetesPath}`. It requires:
 - a valid proof for the method and canonical URI, an authorized OAuth client, and a non-replayed proof;
 - `kubernetes:read` for safe reads or `kubernetes:write` for mutations and streaming write subresources.
 
-`exec`, `attach`, and `portforward` require `kubernetes:write` even when the HTTP handshake is `GET`. The verified access token is forwarded as a Kubernetes bearer token; the DPoP proof is never forwarded. The target kube-apiserver independently validates its accepted audience and applies RBAC. Agent Kubernetes access therefore depends on Realmroot issuing a Hub token that kube-apiserver can also accept, as tracked by the token-exchange integration work.
+`exec`, `attach`, and `portforward` require `kubernetes:write` even when the HTTP handshake is `GET`. The verified access token is exchanged through RFC 8693 for a Realmroot ID token whose audience is `KUBERNETES_OIDC_AUDIENCE`; neither the source access token nor DPoP proof is forwarded. The Hub verifies issuer, signature, audience, subject, actor chain, authorized party, groups, and expiry on the exchange result before Kubernetes independently applies RBAC.
 
 ## Header boundary
 

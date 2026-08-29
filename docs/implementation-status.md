@@ -10,7 +10,7 @@ Kube Cluster Hub is a stable, horizontally scalable cluster catalog and Kubernet
 | --- | --- |
 | Deployment shape | `control-plane/` and `data-plane/` are logical modules in the same Worker/Node artifact and scale together. |
 | Human access | Hub access-token verification for catalog operations and separate Kubernetes ID-token verification; verified Kubernetes token is forwarded directly. |
-| Agent access | The same Hub Resource Server publishes RFC 9728/OpenAPI discovery; Agent routes additionally enforce authorized-client, scope, DPoP/replay, actor/controller identity and attributed audit before direct token forwarding. |
+| Agent access | The same Hub Resource Server publishes RFC 9728/OpenAPI discovery; Agent routes additionally enforce authorized-client, scope, DPoP/replay, actor/controller identity and attributed audit. RFC 8693 exchanges the Agent access token for a Kubernetes-audience ID token before proxying. |
 | Catalog | Credential-free cluster resources with one required reachable API origin and optimistic concurrency. |
 | Inventory interoperability | Optional Cluster Inventory `ClusterProfile` publication, synchronous catalog-write publication, and scheduled repair for Worker and Node. |
 | Proxy | Streaming HTTP for Worker/Node and native Node WebSocket upgrades; dangerous forwarding/impersonation headers stripped. |
@@ -35,8 +35,8 @@ Prometheus URL discovery remains catalog metadata for dashboard metrics. Helm, m
 
 These are deployment/integration configuration, not missing Hub modules:
 
-1. Realmroot must issue a Hub Resource Server token with Kubernetes-compatible identity/group claims.
-2. Every kube-apiserver exposed to Agents must trust the Realmroot issuer, accept the Hub resource audience (or another audience present in the token), and map claims consistently.
+1. Realmroot must authorize the Hub token-exchange Application to exchange Hub Resource Server access tokens for Kubernetes-audience ID tokens.
+2. Every kube-apiserver exposed to Agents must trust the Realmroot issuer, accept `KUBERNETES_OIDC_AUDIENCE`, and map identity/group claims consistently.
 3. Operators must supply network reachability from the Hub runtime to each API server that preserves streaming HTTP and WebSocket upgrades.
 4. Dashboards may discover the Hub catalog through the standard Cluster Inventory projection and use the human proxy with the Realmroot Kubernetes ID token.
 5. Production Node deployments must provide shared PostgreSQL; Worker deployments must use migrated D1.

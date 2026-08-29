@@ -124,7 +124,7 @@ function SignIn({ error, login }: { error: string; login(): Promise<void> }) {
           <ul>
             <li>
               <CloudCog />
-              Bring your own tunnel or private network
+              Use your existing cluster network path
             </li>
             <li>
               <Server />

@@ -19,7 +19,7 @@ beforeEach(async () => {
       resource_version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     )`,
       'CREATE TABLE dpop_proofs (key_thumbprint TEXT NOT NULL, jti TEXT NOT NULL, expires_at TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (key_thumbprint, jti))',
-      "CREATE TABLE audit_events (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL, request_id TEXT NOT NULL, token_id TEXT NOT NULL DEFAULT '', principal_type TEXT NOT NULL, controller_subject TEXT NOT NULL DEFAULT '', agent_issuer TEXT NOT NULL DEFAULT '', agent_subject TEXT NOT NULL DEFAULT '', user_subject TEXT NOT NULL DEFAULT '', client_id TEXT NOT NULL DEFAULT '', scopes TEXT NOT NULL DEFAULT '', cluster_id TEXT NOT NULL, method TEXT NOT NULL, path TEXT NOT NULL, status INTEGER NOT NULL, duration_millis INTEGER NOT NULL)",
+      "CREATE TABLE audit_events (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL, request_id TEXT NOT NULL, token_id TEXT NOT NULL DEFAULT '', principal_type TEXT NOT NULL, controller_subject TEXT NOT NULL DEFAULT '', agent_issuer TEXT NOT NULL DEFAULT '', agent_subject TEXT NOT NULL DEFAULT '', user_subject TEXT NOT NULL DEFAULT '', client_id TEXT NOT NULL DEFAULT '', scopes TEXT NOT NULL DEFAULT '', cluster_id TEXT NOT NULL, method TEXT NOT NULL, path TEXT NOT NULL, status INTEGER NOT NULL, duration_millis INTEGER NOT NULL, exchange_status TEXT NOT NULL DEFAULT 'not_applicable', target_audience TEXT NOT NULL DEFAULT '')",
     ].map((query) => env.DB.prepare(query)),
   )
 })

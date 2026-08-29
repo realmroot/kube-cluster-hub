@@ -6,6 +6,7 @@ import type { DatabaseAdapter } from './database'
 import type { InventoryKubernetesClient } from './inventory'
 import { InventoryPublisher } from './inventory'
 import { type HubStore, Store } from './store'
+import { AgentTokenExchanger } from './token-exchange'
 
 export interface IdentityRuntime {
   issuer: Awaited<ReturnType<typeof discoverIssuer>>
@@ -56,6 +57,13 @@ export async function bootstrap(
       config.agentAuthorizedClients,
       config.agentSigningAlgorithms,
       store,
+    ),
+    agentTokens: new AgentTokenExchanger(
+      identity.issuer,
+      config.tokenExchangeClientId,
+      config.tokenExchangeClientSecret,
+      config.oidcAudience,
+      fetcher,
     ),
     proxy,
     ...(inventoryClient

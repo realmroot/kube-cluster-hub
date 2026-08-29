@@ -77,6 +77,8 @@ describe.skipIf(!url)('PostgreSQL persistence adapter', () => {
       path: '/api/v1/pods',
       status: 200,
       durationMillis: 1,
+      exchangeStatus: 'succeeded',
+      targetAudience: 'kubernetes-client',
     })
     expect(await store.listAuditEvents(undefined, 10)).toContainEqual(
       expect.objectContaining({

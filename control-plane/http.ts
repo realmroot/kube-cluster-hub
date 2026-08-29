@@ -12,6 +12,7 @@ import {
   ValidationError,
 } from './domain'
 import { InventoryPublicationError } from './inventory'
+import { TokenExchangeError } from './token-exchange'
 
 export type HubContext = Context<{ Variables: Variables }>
 
@@ -67,6 +68,18 @@ export function installHttpBoundary(
         error.status,
         'upstream-unavailable',
         'Upstream unavailable',
+        error.message,
+      )
+    if (error instanceof TokenExchangeError)
+      return problem(
+        context,
+        error.code === 'denied' ? 403 : 502,
+        error.code === 'denied'
+          ? 'token-exchange-denied'
+          : 'token-exchange-unavailable',
+        error.code === 'denied'
+          ? 'Token exchange denied'
+          : 'Token exchange unavailable',
         error.message,
       )
     if (error instanceof InventoryPublicationError)
@@ -199,5 +212,7 @@ export function auditStatus(error: unknown, fallback: number): number {
   if (error instanceof NotFoundError) return 404
   if (error instanceof ConflictError) return 412
   if (error instanceof ProxyError) return error.status
+  if (error instanceof TokenExchangeError)
+    return error.code === 'denied' ? 403 : 502
   return fallback
 }

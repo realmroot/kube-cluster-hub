@@ -41,6 +41,7 @@ export interface AgentPrincipal {
   scope: string
   tokenId: string
   token: string
+  expiresAt: number
 }
 
 export interface AuditEvent {
@@ -60,6 +61,8 @@ export interface AuditEvent {
   path: string
   status: number
   durationMillis: number
+  exchangeStatus: string
+  targetAudience: string
 }
 
 export class NotFoundError extends Error {}

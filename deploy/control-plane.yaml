@@ -55,6 +55,7 @@ data:
   CATALOG_ADMIN_GROUPS: platform-admins
   RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS: authorized-toolbox-client
   RESOURCE_SERVER_JWT_ALGORITHMS: RS256
+  TOKEN_EXCHANGE_CLIENT_ID: hub-token-exchanger
   AUDIT_RETENTION: 2160h
   INVENTORY_ENABLED: "true"
   INVENTORY_NAMESPACE: cluster-inventory
@@ -99,6 +100,11 @@ spec:
                 secretKeyRef:
                   name: kube-cluster-hub-secrets
                   key: database-url
+            - name: TOKEN_EXCHANGE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: kube-cluster-hub-secrets
+                  key: token-exchange-client-secret
           ports:
             - name: http
               containerPort: 8080

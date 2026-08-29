@@ -14,6 +14,7 @@ import {
   requiredRequestId,
 } from '../http'
 import type { HubStore } from '../store'
+import type { AgentIdentityToken } from '../token-exchange'
 
 export function registerAccessRoutes(
   app: HubApp,
@@ -59,8 +60,11 @@ async function userProxy(
     status = auditStatus(error, status)
     throw error
   } finally {
-    await dependencies.store.appendAudit(
+    await appendAccessAudit(
+      context,
+      dependencies.store,
       auditForUser(context, user, clusterId, status, Date.now() - started),
+      status,
     )
   }
 }
@@ -73,17 +77,22 @@ async function agentProxy(
   const agent = await verifyAgent(context, dependencies)
   const clusterId = requiredClusterId(context)
   let status = 403
+  let exchanged: AgentIdentityToken | undefined
+  let exchangeStatus = 'not_attempted'
   try {
     requireAgentScope(
       agent,
       kubernetesScope(context.req.method, new URL(context.req.url).pathname),
     )
     const cluster = await enabledCluster(dependencies.store, clusterId)
+    exchangeStatus = 'failed'
+    exchanged = await dependencies.agentTokens.exchange(agent)
+    exchangeStatus = 'succeeded'
     status = 502
     const response = await proxyAgentRequest(
       context.req.raw,
       cluster,
-      agent,
+      exchanged.token,
       requiredRequestId(context),
       dependencies.proxy,
     )
@@ -93,10 +102,35 @@ async function agentProxy(
     status = auditStatus(error, status)
     throw error
   } finally {
-    await dependencies.store.appendAudit(
-      auditForAgent(context, agent, clusterId, status, Date.now() - started),
+    await appendAccessAudit(
+      context,
+      dependencies.store,
+      auditForAgent(
+        context,
+        agent,
+        clusterId,
+        status,
+        Date.now() - started,
+        exchangeStatus,
+        exchanged?.targetAudience || dependencies.config.oidcAudience,
+      ),
+      status,
     )
   }
+}
+
+async function appendAccessAudit(
+  context: HubContext,
+  store: HubStore,
+  event: Parameters<HubStore['appendAudit']>[0],
+  status: number,
+): Promise<void> {
+  const write = store.appendAudit(event)
+  if (status === 101) {
+    context.executionCtx.waitUntil(write)
+    return
+  }
+  await write
 }
 
 export async function verifyAgent(
@@ -141,6 +175,8 @@ function auditForUser(
     path: new URL(context.req.url).pathname,
     status,
     durationMillis,
+    exchangeStatus: 'not_applicable',
+    targetAudience: '',
   }
 }
 
@@ -150,6 +186,8 @@ export function auditForAgent(
   clusterId: string,
   status: number,
   durationMillis: number,
+  exchangeStatus = 'not_attempted',
+  targetAudience = '',
 ) {
   return {
     requestId: context.get('requestId'),
@@ -166,5 +204,7 @@ export function auditForAgent(
     path: new URL(context.req.url).pathname,
     status,
     durationMillis,
+    exchangeStatus,
+    targetAudience,
   }
 }

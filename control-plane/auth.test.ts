@@ -37,7 +37,13 @@ describe('OIDC and OAuth Agent authentication', () => {
     server = createServer((request, response) => {
       response.setHeader('Content-Type', 'application/json')
       if (request.url === '/.well-known/openid-configuration') {
-        response.end(JSON.stringify({ issuer, jwks_uri: `${issuer}/jwks` }))
+        response.end(
+          JSON.stringify({
+            issuer,
+            jwks_uri: `${issuer}/jwks`,
+            token_endpoint: `${issuer}/token`,
+          }),
+        )
       } else if (request.url === '/jwks') {
         response.end(JSON.stringify(jwks))
       } else {

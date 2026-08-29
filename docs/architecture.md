@@ -17,7 +17,7 @@ Cluster Inventory API <┤ optional ClusterProfile publisher│
                               D1 or PostgreSQL
 ```
 
-`control-plane/` owns identity verification, catalog resources, OpenAPI/discovery, audit, and persistence. `data-plane/` owns target construction, request sanitization, token forwarding, and HTTP error translation. Node's native Upgrade handler follows the same rules for exec, attach, and port-forward WebSockets.
+`control-plane/` owns identity verification, RFC 8693 token exchange, catalog resources, OpenAPI/discovery, audit, and persistence. `data-plane/` owns target construction, request sanitization, Kubernetes ID-token forwarding, and HTTP error translation. Node's native Upgrade handler follows the same rules for exec, attach, and port-forward WebSockets.
 
 ## Cluster catalog
 
@@ -35,7 +35,7 @@ A cluster contains only:
 | `resourceVersion` | optimistic concurrency version |
 | timestamps | creation and last replacement time |
 
-It contains no credentials, per-user permissions, TLS material, connection mode, or deployment-specific tunnel information. A tunnel is just one way to make `apiServerUrl` reachable.
+It contains no credentials, per-user permissions, TLS material, connection mode, or deployment-specific networking configuration.
 
 ## Human request flow
 
@@ -64,7 +64,7 @@ Hub scopes are a resource-server boundary, not a replacement for Kubernetes RBAC
 - SQLite (`HUB_DATABASE_DSN`) is deliberately local development mode and must not be used by multiple replicas.
 - No in-memory informer or per-user/per-cluster cache is required. Memory therefore does not grow with the user × cluster product.
 
-API-server networking and load balancing are external concerns. Standard private networking, Cloudflare Tunnel, Connect, VPNs, or managed Kubernetes endpoints all work without a Hub-specific component.
+API-server networking and load balancing are external concerns. Any deployment-managed network path works without a Hub-specific component.
 
 ## Cluster Inventory projection
 
@@ -81,4 +81,4 @@ through the data plane.
 
 ## Removed architecture
 
-The retired Connector, ServiceAccount impersonation, dispatch JWT, and Connector heartbeat are removed. They created another trust protocol and availability boundary without being necessary when the Hub can reach the API server and forward the Realmroot credential directly. The Inventory publisher is only a standards-based catalog projection and is not a target-cluster connector or execution credential.
+The retired Connector, ServiceAccount impersonation, dispatch JWT, and Connector heartbeat are removed. They created another trust protocol and availability boundary without being necessary when the Hub can reach the API server and exchange the Realmroot Agent credential for a Kubernetes-audience ID token. The Inventory publisher is only a standards-based catalog projection and is not a target-cluster connector or execution credential.

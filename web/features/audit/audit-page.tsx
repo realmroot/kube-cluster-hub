@@ -1,11 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { Activity, Bot, CircleOff, UserRound } from 'lucide-react'
+import { useState } from 'react'
 import type { HubApi } from '../../shared/api'
+import { PaginationControls } from '../../shared/pagination-controls'
 
 export function AuditPage({ api }: { api: HubApi }) {
+  const [pageTokens, setPageTokens] = useState([''])
+  const pageToken = pageTokens.at(-1) ?? ''
   const query = useQuery({
-    queryKey: ['audit-events'],
-    queryFn: () => api.listAuditEvents(),
+    queryKey: ['audit-events', pageToken],
+    queryFn: () => api.listAuditEvents(pageToken),
   })
   const rows = query.data?.items ?? []
   return (
@@ -47,6 +51,7 @@ export function AuditPage({ api }: { api: HubApi }) {
                 <th>Actor</th>
                 <th>Cluster</th>
                 <th>Request</th>
+                <th>Exchange</th>
                 <th>Result</th>
                 <th>Time</th>
               </tr>
@@ -68,6 +73,20 @@ export function AuditPage({ api }: { api: HubApi }) {
                       </b>
                     </span>
                     <small>{row.principalType}</small>
+                  </td>
+                  <td>
+                    {row.principalType === 'agent' ? (
+                      <>
+                        <span
+                          className={`badge ${row.exchangeStatus === 'succeeded' ? 'success' : 'error'}`}
+                        >
+                          {row.exchangeStatus}
+                        </span>
+                        <small className="truncate">{row.targetAudience}</small>
+                      </>
+                    ) : (
+                      '—'
+                    )}
                   </td>
                   <td>{row.clusterId || 'Catalog'}</td>
                   <td>
@@ -94,6 +113,15 @@ export function AuditPage({ api }: { api: HubApi }) {
               ))}
             </tbody>
           </table>
+          <PaginationControls
+            page={pageTokens.length}
+            hasNext={!!query.data?.pagination.nextPageToken}
+            previous={() => setPageTokens((tokens) => tokens.slice(0, -1))}
+            next={() => {
+              const token = query.data?.pagination.nextPageToken
+              if (token) setPageTokens((tokens) => [...tokens, token])
+            }}
+          />
         </div>
       )}
     </>

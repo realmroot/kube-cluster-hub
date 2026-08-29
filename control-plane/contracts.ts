@@ -91,6 +91,8 @@ const auditEvent = {
     'path',
     'status',
     'durationMillis',
+    'exchangeStatus',
+    'targetAudience',
   ],
   properties: {
     id: { type: 'integer', minimum: 1 },
@@ -109,6 +111,11 @@ const auditEvent = {
     path: { type: 'string' },
     status: { type: 'integer', minimum: 100, maximum: 599 },
     durationMillis: { type: 'integer', minimum: 0 },
+    exchangeStatus: {
+      type: 'string',
+      enum: ['not_applicable', 'not_attempted', 'succeeded', 'failed'],
+    },
+    targetAudience: { type: 'string' },
   },
 }
 

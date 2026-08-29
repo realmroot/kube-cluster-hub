@@ -26,6 +26,7 @@ export class AuthenticationError extends Error {
 interface IssuerKeys {
   issuer: string
   keys: JWTVerifyGetKey
+  tokenEndpoint: string
 }
 
 export async function discoverIssuer(issuer: string): Promise<IssuerKeys> {
@@ -38,9 +39,17 @@ export async function discoverIssuer(issuer: string): Promise<IssuerKeys> {
   if (!metadata || typeof metadata !== 'object')
     throw new Error('issuer discovery response is invalid')
   const value = metadata as Record<string, unknown>
-  if (value.issuer !== issuer || typeof value.jwks_uri !== 'string')
+  if (
+    value.issuer !== issuer ||
+    typeof value.jwks_uri !== 'string' ||
+    typeof value.token_endpoint !== 'string'
+  )
     throw new Error('issuer discovery metadata is invalid')
-  return { issuer, keys: createRemoteJWKSet(new URL(value.jwks_uri)) }
+  return {
+    issuer,
+    keys: createRemoteJWKSet(new URL(value.jwks_uri)),
+    tokenEndpoint: value.token_endpoint,
+  }
 }
 
 export class UserVerifier {
@@ -223,6 +232,7 @@ export class AgentVerifier {
       scope: payload.scope || '',
       tokenId: payload.jti,
       token,
+      expiresAt: payload.exp ?? 0,
     }
   }
 }

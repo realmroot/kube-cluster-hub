@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { App } from './app'
 import { AuthProvider } from './shared/auth'
 import { type UiConfig, uiConfigSchema } from './shared/contracts'
+import './pagination.css'
 import './styles.css'
 
 const queryClient = new QueryClient({

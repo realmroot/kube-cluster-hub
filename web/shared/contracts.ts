@@ -49,6 +49,13 @@ export const auditEventSchema = z.object({
   path: z.string(),
   status: z.number(),
   durationMillis: z.number(),
+  exchangeStatus: z.enum([
+    'not_applicable',
+    'not_attempted',
+    'succeeded',
+    'failed',
+  ]),
+  targetAudience: z.string(),
 })
 export const pageSchema = <T extends z.ZodType>(item: T) =>
   z.object({

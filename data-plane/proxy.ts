@@ -1,8 +1,4 @@
-import type {
-  AgentPrincipal,
-  Cluster,
-  UserPrincipal,
-} from '../control-plane/domain'
+import type { Cluster, UserPrincipal } from '../control-plane/domain'
 import { ValidationError } from '../control-plane/domain'
 
 export interface ProxyDependencies {
@@ -38,14 +34,14 @@ export function proxyUserRequest(
 export function proxyAgentRequest(
   request: Request,
   cluster: Cluster,
-  principal: AgentPrincipal,
+  kubernetesToken: string,
   requestId: string,
   dependencies: ProxyDependencies,
 ): Promise<Response> {
   return proxyRequest(
     request,
     cluster,
-    principal.token,
+    kubernetesToken,
     requestId,
     dependencies,
     '/api',
@@ -81,6 +77,19 @@ async function proxyRequest(
     const response = await dependencies.fetch(
       new Request(`${cluster.apiServerUrl}${targetUri}`, init),
     )
+    if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+      console.info(
+        JSON.stringify({
+          message: 'kubernetes.websocket.upstream',
+          requestId,
+          status: response.status,
+          hasWebSocket: Boolean(
+            (response as Response & { webSocket?: WebSocket }).webSocket,
+          ),
+          protocol: response.headers.get('Sec-WebSocket-Protocol') || '',
+        }),
+      )
+    }
     if (response.status === 101) return response
     const responseHeaders = new Headers(response.headers)
     responseHeaders.set('Cache-Control', 'no-store, no-transform')

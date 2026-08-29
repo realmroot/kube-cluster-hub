@@ -125,8 +125,8 @@ export function ClusterDialog({
               placeholder="https://api.example.com:6443"
             />
             <small>
-              Use an endpoint reachable by this Hub deployment. Private clusters
-              can use any standard tunnel or private network.
+              Use an endpoint reachable by this Hub deployment through your
+              existing network infrastructure.
             </small>
           </label>
           <label className="span-2">

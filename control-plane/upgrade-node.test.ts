@@ -64,6 +64,7 @@ describe('Node HTTP Upgrade proxy', () => {
       scope: 'kubernetes:read',
       tokenId: 'token-1',
       token: 'agent-access-token',
+      expiresAt: Math.floor(Date.now() / 1_000) + 300,
     }
     const dependencies: AppDependencies = {
       config,
@@ -71,6 +72,13 @@ describe('Node HTTP Upgrade proxy', () => {
       catalogUsers: { verify: async () => user },
       kubernetesUsers: { verify: async () => user },
       agents: { verify: async () => readOnlyAgent },
+      agentTokens: {
+        exchange: async () => ({
+          token: 'kubernetes-id-token',
+          targetAudience: config.oidcAudience,
+          groups: [],
+        }),
+      },
       proxy: { fetch },
     }
     const runtime: Runtime = {
@@ -114,6 +122,8 @@ function testConfig(): Config {
     KUBERNETES_OIDC_AUDIENCE: 'kubernetes-client',
     CATALOG_ADMIN_GROUPS: 'platform-admins',
     RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS: 'authorized-toolbox-client',
+    TOKEN_EXCHANGE_CLIENT_ID: 'hub-token-exchanger',
+    TOKEN_EXCHANGE_CLIENT_SECRET: 'test-secret',
   })
 }
 

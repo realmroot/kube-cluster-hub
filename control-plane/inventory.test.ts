@@ -179,6 +179,8 @@ function config(kubeconfig = '') {
     KUBERNETES_OIDC_AUDIENCE: 'kubernetes-client',
     CATALOG_ADMIN_GROUPS: 'platform-admins',
     RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS: 'toolbox-client',
+    TOKEN_EXCHANGE_CLIENT_ID: 'hub-token-exchanger',
+    TOKEN_EXCHANGE_CLIENT_SECRET: 'test-secret',
     INVENTORY_ENABLED: 'true',
     INVENTORY_KUBECONFIG: kubeconfig,
   })

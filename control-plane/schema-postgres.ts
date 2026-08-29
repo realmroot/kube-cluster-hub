@@ -64,6 +64,8 @@ export const pgAuditEvents = pgTable(
     path: text('path').notNull(),
     status: integer('status').notNull(),
     durationMillis: integer('duration_millis').notNull(),
+    exchangeStatus: text('exchange_status').notNull().default('not_applicable'),
+    targetAudience: text('target_audience').notNull().default(''),
   },
   (table) => [
     index('audit_events_created').on(table.createdAt),
