@@ -84,6 +84,19 @@ describe('ClusterProfile publication', () => {
 })
 
 describe('Worker Inventory Kubernetes transport', () => {
+  it('invokes fetch without binding it to the client instance', async () => {
+    const fetcher = vi.fn(function (this: unknown) {
+      expect(this).toBeUndefined()
+      return Promise.resolve(Response.json({ items: [] }))
+    }) as unknown as typeof fetch
+    const client = WorkerInventoryKubernetesClient.fromConfig(
+      config(workerKubeconfig()),
+      fetcher,
+    )
+
+    await client.listManagedClusterProfiles('cluster-inventory')
+  })
+
   it('uses bearer authentication and Kubernetes apply/status endpoints', async () => {
     const requests: Request[] = []
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {

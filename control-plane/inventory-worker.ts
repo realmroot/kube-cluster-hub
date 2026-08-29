@@ -20,7 +20,7 @@ export class WorkerInventoryKubernetesClient
 
   static fromConfig(
     config: Config,
-    fetcher: typeof fetch = fetch,
+    fetcher: typeof fetch = (input, init) => fetch(input, init),
   ): WorkerInventoryKubernetesClient {
     if (!config.inventory.kubeconfig) {
       throw new Error(
@@ -95,7 +95,8 @@ export class WorkerInventoryKubernetesClient
     query = '',
     acceptedStatuses: readonly number[] = [],
   ): Promise<unknown> {
-    const response = await this.fetcher(`${this.server}${path}${query}`, {
+    const fetcher = this.fetcher
+    const response = await fetcher(`${this.server}${path}${query}`, {
       method,
       headers: {
         Authorization: `Bearer ${this.token}`,
