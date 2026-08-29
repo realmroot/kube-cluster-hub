@@ -27,7 +27,7 @@ jobs:
     env:
       HUB_POSTGRES_TEST_URL: postgres://kube_cluster_hub:test-password@127.0.0.1:5432/kube_cluster_hub_test
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
         with: { version: 11.24.0 }
       - uses: actions/setup-node@v6
