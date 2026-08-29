@@ -5,8 +5,6 @@ export interface ConfigSource {
   KUBERNETES_OIDC_AUDIENCE?: string
   OIDC_GROUPS_CLAIM?: string
   CATALOG_ADMIN_GROUPS?: string
-  RESOURCE_SERVER_URL?: string
-  RESOURCE_SERVER_ISSUER?: string
   RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS?: string
   RESOURCE_SERVER_JWT_ALGORITHMS?: string
   AUDIT_RETENTION?: string
@@ -14,16 +12,14 @@ export interface ConfigSource {
 
 export interface Config {
   publicUrl: string
-  catalogUrl: string
+  apiUrl: string
   uiClientId: string
   oidcIssuer: string
   oidcAudience: string
   oidcGroupsClaim: string
   catalogAdminGroups: ReadonlySet<string>
-  resourceUrl: string
-  resourceIssuer: string
-  resourceAuthorizedClients: ReadonlySet<string>
-  resourceSigningAlgorithms: readonly string[]
+  agentAuthorizedClients: ReadonlySet<string>
+  agentSigningAlgorithms: readonly string[]
   auditRetentionMs: number
 }
 
@@ -32,14 +28,10 @@ export function loadConfig(source: ConfigSource): Config {
     required(source.HUB_PUBLIC_URL, 'HUB_PUBLIC_URL'),
     'HUB_PUBLIC_URL',
   )
-  const resourceUrl = absoluteUrl(
-    source.RESOURCE_SERVER_URL || `${publicUrl}/api/agent`,
-    'RESOURCE_SERVER_URL',
-  )
   const auditRetentionMs = parseDuration(source.AUDIT_RETENTION || '2160h')
   return {
     publicUrl,
-    catalogUrl: `${publicUrl}/api/catalog`,
+    apiUrl: `${publicUrl}/api`,
     uiClientId: required(source.HUB_UI_CLIENT_ID, 'HUB_UI_CLIENT_ID'),
     oidcIssuer: absoluteUrl(
       required(source.OIDC_ISSUER, 'OIDC_ISSUER'),
@@ -54,16 +46,11 @@ export function loadConfig(source: ConfigSource): Config {
       source.CATALOG_ADMIN_GROUPS,
       'CATALOG_ADMIN_GROUPS',
     ),
-    resourceUrl,
-    resourceIssuer: absoluteUrl(
-      required(source.RESOURCE_SERVER_ISSUER, 'RESOURCE_SERVER_ISSUER'),
-      'RESOURCE_SERVER_ISSUER',
-    ),
-    resourceAuthorizedClients: nonEmptySet(
+    agentAuthorizedClients: nonEmptySet(
       source.RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS,
       'RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS',
     ),
-    resourceSigningAlgorithms: commaList(
+    agentSigningAlgorithms: commaList(
       source.RESOURCE_SERVER_JWT_ALGORITHMS || 'RS256',
     ),
     auditRetentionMs,

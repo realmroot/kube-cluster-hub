@@ -71,6 +71,15 @@ export class UserVerifier {
           'OAuth access token is required',
         )
       }
+      if (
+        this.tokenKind === 'access' &&
+        typeof (payload.cnf as { jkt?: unknown } | undefined)?.jkt === 'string'
+      ) {
+        throw new AuthenticationError(
+          'invalid_token',
+          'DPoP-bound access token cannot be used as Bearer',
+        )
+      }
       if (!payload.sub)
         throw new AuthenticationError(
           'invalid_token',

@@ -9,7 +9,7 @@ The control-plane routes and Kubernetes data-plane proxy are separate TypeScript
 - Realmroot OAuth 2.1/OIDC login with Authorization Code + PKCE
 - versioned cluster catalog CRUD and optimistic concurrency
 - user token passthrough to Kubernetes; Kubernetes RBAC remains authoritative
-- DPoP-protected Agent resource server with OpenAPI and RFC 9728 discovery
+- one Hub Resource Server for human and DPoP-protected Agent access, with OpenAPI and RFC 9728 discovery
 - Agent-attributed audit events
 - HTTP streaming and Node WebSocket upgrades for Kubernetes subresources
 - one React/Vite administration UI
@@ -26,7 +26,7 @@ catalog client ─┘       │
                        D1 or PostgreSQL
 ```
 
-Humans send a Realmroot ID token whose audience is the Kubernetes OIDC client. Agents send a DPoP-bound access token for the Hub Resource Server. The Hub verifies its own token boundary, strips untrusted forwarding and impersonation headers, and sends that same signed token as `Authorization: Bearer` to Kubernetes. The target kube-apiserver independently decides whether it accepts that token audience and applies RBAC. See [docs/architecture.md](docs/architecture.md).
+Humans use a Hub-audience access token for catalog operations and a Realmroot ID token whose audience is the Kubernetes OIDC client for Kubernetes operations. Agents use a DPoP-bound Hub access token for both discovery and Kubernetes operations. The Hub verifies the applicable token boundary, strips untrusted forwarding and impersonation headers, and sends the Kubernetes credential as `Authorization: Bearer` to Kubernetes. The target kube-apiserver independently decides whether it accepts that token audience and applies RBAC. See [docs/architecture.md](docs/architecture.md).
 
 ## Local development
 

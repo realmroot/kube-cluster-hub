@@ -10,13 +10,13 @@
 | `KUBERNETES_OIDC_AUDIENCE` | audience accepted by kube-apiserver |
 | `OIDC_GROUPS_CLAIM` | group claim, default `groups` |
 | `CATALOG_ADMIN_GROUPS` | groups allowed to mutate the catalog/read audit |
-| `RESOURCE_SERVER_URL` | Agent resource identifier, normally the public `/api/agent` URL |
-| `RESOURCE_SERVER_ISSUER` | issuer of Agent access tokens |
 | `RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS` | Toolbox/controller OAuth client allow-list |
 | `RESOURCE_SERVER_JWT_ALGORITHMS` | accepted access-token algorithms, default `RS256` |
 | `AUDIT_RETENTION` | retention duration, default `2160h` |
 
 There is no OIDC client secret: the web client uses Authorization Code + PKCE. There is no Hub signing key, Kubernetes credential, Connector token, or inventory credential.
+
+The sole Hub protected-resource URL is derived as `${HUB_PUBLIC_URL}/api`; it is the RFC 8707 resource indicator and token audience for both browser catalog access and Agent access. `OIDC_ISSUER` is the only accepted authorization-server issuer. Kubernetes browser requests continue to use `KUBERNETES_OIDC_AUDIENCE` because they are authenticated by kube-apiserver rather than the Hub API.
 
 ## Cloudflare Workers
 

@@ -4,7 +4,7 @@ import {
   proxyUserRequest,
 } from '../../data-plane/proxy'
 import type { AppDependencies, HubApp } from '../app-dependencies'
-import { kubernetesScope, scopes } from '../contracts'
+import { kubernetesScope } from '../contracts'
 import type { AgentPrincipal, UserPrincipal } from '../domain'
 import {
   auditStatus,
@@ -14,7 +14,6 @@ import {
   requiredRequestId,
 } from '../http'
 import type { HubStore } from '../store'
-import { auditPage, clusterPage } from './pages'
 
 export function registerAccessRoutes(
   app: HubApp,
@@ -27,50 +26,10 @@ export function registerAccessRoutes(
     userProxy(context, dependencies),
   )
 
-  app.get('/api/agent/clusters', async (context) => {
-    const started = Date.now()
-    const agent = await verifyAgent(context, dependencies)
-    let status = 403
-    try {
-      requireAgentScope(agent, scopes.clustersRead)
-      const response = await clusterPage(
-        context,
-        dependencies.store,
-        `${dependencies.config.resourceUrl}/clusters`,
-      )
-      status = response.status
-      return response
-    } finally {
-      await dependencies.store.appendAudit(
-        auditForAgent(context, agent, '', status, Date.now() - started),
-      )
-    }
-  })
-
-  app.get('/api/agent/audit-events', async (context) => {
-    const started = Date.now()
-    const agent = await verifyAgent(context, dependencies)
-    let status = 403
-    try {
-      requireAgentScope(agent, scopes.auditRead)
-      const response = await auditPage(
-        context,
-        dependencies.store,
-        `${dependencies.config.resourceUrl}/audit-events`,
-      )
-      status = response.status
-      return response
-    } finally {
-      await dependencies.store.appendAudit(
-        auditForAgent(context, agent, '', status, Date.now() - started),
-      )
-    }
-  })
-
-  app.all('/api/agent/clusters/:clusterId/kubernetes', (context) =>
+  app.get('/api/clusters/:clusterId/kubernetes', (context) =>
     agentProxy(context, dependencies),
   )
-  app.all('/api/agent/clusters/:clusterId/kubernetes/*', (context) =>
+  app.all('/api/clusters/:clusterId/kubernetes/*', (context) =>
     agentProxy(context, dependencies),
   )
 }
@@ -140,12 +99,12 @@ async function agentProxy(
   }
 }
 
-async function verifyAgent(
+export async function verifyAgent(
   context: HubContext,
   dependencies: AppDependencies,
 ): Promise<AgentPrincipal> {
   const url = new URL(context.req.url)
-  const canonical = `${dependencies.config.resourceUrl}${url.pathname.slice('/api/agent'.length)}${url.search}`
+  const canonical = `${dependencies.config.apiUrl}${url.pathname.slice('/api'.length)}${url.search}`
   return dependencies.agents.verify(
     context.req.header('Authorization'),
     context.req.header('DPoP'),
@@ -185,7 +144,7 @@ function auditForUser(
   }
 }
 
-function auditForAgent(
+export function auditForAgent(
   context: HubContext,
   agent: AgentPrincipal,
   clusterId: string,

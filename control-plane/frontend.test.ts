@@ -22,9 +22,7 @@ describe('frontend routing', () => {
 
   it('does not convert API misses into HTML', () => {
     expect(
-      isFrontendNavigation(
-        new Request('https://hub.example.test/api/catalog/missing'),
-      ),
+      isFrontendNavigation(new Request('https://hub.example.test/api/missing')),
     ).toBe(false)
   })
 })

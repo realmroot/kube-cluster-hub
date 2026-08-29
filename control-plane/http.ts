@@ -31,9 +31,12 @@ export function installHttpBoundary(
 
   app.onError((error, context) => {
     if (error instanceof AuthenticationError) {
-      const scheme = context.req.path.startsWith('/api/agent')
-        ? 'DPoP'
-        : 'Bearer'
+      const authorization = context.req.header('Authorization') || ''
+      const agentOnly = /^\/api\/clusters\/[^/]+\/kubernetes(?:\/|$)/.test(
+        context.req.path,
+      )
+      const scheme =
+        agentOnly || authorization.startsWith('DPoP ') ? 'DPoP' : 'Bearer'
       context.header('WWW-Authenticate', `${scheme} error="${error.code}"`)
       return problem(context, 401, error.code, 'Unauthorized', error.message)
     }

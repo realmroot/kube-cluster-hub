@@ -48,7 +48,7 @@ export function proxyAgentRequest(
     principal.token,
     requestId,
     dependencies,
-    '/api/agent',
+    '/api',
   )
 }
 

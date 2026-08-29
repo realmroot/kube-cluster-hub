@@ -14,7 +14,7 @@ function identityFor(
   ctx: ExecutionContext,
 ): Promise<IdentityRuntime> {
   const config = loadConfig(env)
-  const fingerprint = `${config.oidcIssuer}\u0000${config.resourceIssuer}\u0000${config.oidcAudience}`
+  const fingerprint = `${config.oidcIssuer}\u0000${config.oidcAudience}`
   if (!identityCache || identityCache.fingerprint !== fingerprint) {
     const promise = prepareIdentity(config)
     identityCache = { fingerprint, promise }

@@ -1,6 +1,6 @@
 import type { Config } from './config'
 
-export const apiVersion = '2026-08-28'
+export const apiVersion = '2026-08-29'
 export const scopes = {
   clustersRead: 'clusters:read',
   clustersWrite: 'clusters:write',
@@ -9,14 +9,9 @@ export const scopes = {
   auditRead: 'audit-events:read',
 } as const
 
-export const catalogScopes = [
+export const hubScopes = [
   scopes.clustersRead,
   scopes.clustersWrite,
-  scopes.auditRead,
-] as const
-
-export const agentScopes = [
-  scopes.clustersRead,
   scopes.kubernetesRead,
   scopes.kubernetesWrite,
   scopes.auditRead,
@@ -117,17 +112,32 @@ const auditEvent = {
   },
 }
 
-export function catalogOpenApi(config: Config): object {
+export function hubOpenApi(config: Config): object {
+  const userSecurity = (scope: string) => [{ userOAuth: [scope] }]
+  const agentSecurity = (scope: string) => [{ agentOAuth: [scope] }]
+  const userOrAgentSecurity = (scope: string) => [
+    ...userSecurity(scope),
+    ...agentSecurity(scope),
+  ]
   return {
     openapi: '3.1.0',
-    info: { title: 'Kube Cluster Hub Catalog API', version: apiVersion },
-    servers: [{ url: config.catalogUrl }],
-    security: [{ oidc: [] }],
+    info: {
+      title: 'Kube Cluster Hub API',
+      version: apiVersion,
+      description:
+        'Manage the cluster catalog and invoke Kubernetes through one Realmroot Resource Server. Browser users use Bearer access tokens for catalog operations. Agents use DPoP-bound access tokens and preserve their actor identity at the audit boundary.',
+    },
+    servers: [{ url: config.apiUrl }],
     components: {
       securitySchemes: {
-        oidc: {
+        userOAuth: {
           type: 'openIdConnect',
           openIdConnectUrl: `${config.oidcIssuer}/.well-known/openid-configuration`,
+        },
+        agentOAuth: {
+          type: 'openIdConnect',
+          openIdConnectUrl: `${config.oidcIssuer}/.well-known/openid-configuration`,
+          'x-dpop-required': true,
         },
       },
       parameters: {
@@ -172,7 +182,7 @@ export function catalogOpenApi(config: Config): object {
             parameter('pageToken'),
           ],
           false,
-          scopes.clustersRead,
+          userOrAgentSecurity(scopes.clustersRead),
         ),
       },
       '/clusters/{clusterId}': {
@@ -189,21 +199,21 @@ export function catalogOpenApi(config: Config): object {
           'Get a cluster',
           [parameter('apiVersion')],
           false,
-          scopes.clustersRead,
+          userOrAgentSecurity(scopes.clustersRead),
         ),
         put: operation(
           'replaceCluster',
           'Create or replace a cluster',
           [parameter('apiVersion')],
           true,
-          scopes.clustersWrite,
+          userSecurity(scopes.clustersWrite),
         ),
         delete: operation(
           'deleteCluster',
           'Delete a cluster',
           [parameter('apiVersion')],
           false,
-          scopes.clustersWrite,
+          userSecurity(scopes.clustersWrite),
         ),
       },
       '/audit-events': {
@@ -216,53 +226,22 @@ export function catalogOpenApi(config: Config): object {
             parameter('pageToken'),
           ],
           false,
-          scopes.auditRead,
+          userOrAgentSecurity(scopes.auditRead),
         ),
       },
-    },
-  }
-}
-
-export function agentOpenApi(config: Config): object {
-  const oauth = (scope: string) => [{ oauth: [scope] }]
-  return {
-    openapi: '3.1.0',
-    info: {
-      title: 'Kube Cluster Hub Agent API',
-      version: apiVersion,
-      description:
-        'Discover clusters and invoke the canonical Kubernetes HTTP API with a DPoP-bound Realmroot Resource Server token. The original token is forwarded and Kubernetes independently validates its accepted audience and RBAC.',
-    },
-    servers: [{ url: config.resourceUrl }],
-    components: {
-      securitySchemes: {
-        oauth: {
-          type: 'openIdConnect',
-          openIdConnectUrl: `${config.resourceIssuer}/.well-known/openid-configuration`,
-          'x-dpop-required': true,
-        },
-      },
-      schemas: {
-        Cluster: cluster,
-        AuditEvent: auditEvent,
-        Problem: problem,
-      },
-    },
-    paths: {
-      '/clusters': {
-        get: {
-          ...operation('listClusters', 'List clusters'),
-          security: oauth(scopes.clustersRead),
-        },
-      },
-      '/audit-events': {
-        get: {
-          ...operation(
-            'listAuditEvents',
-            'List Agent-attributed access audit events',
-          ),
-          security: oauth(scopes.auditRead),
-        },
+      '/clusters/{clusterId}/kubernetes': {
+        parameters: [
+          {
+            name: 'clusterId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string' },
+          },
+        ],
+        get: kubernetesOperation(
+          'getKubernetesApiRoot',
+          agentSecurity(scopes.kubernetesRead),
+        ),
       },
       '/clusters/{clusterId}/kubernetes/{kubernetesPath}': {
         parameters: [
@@ -281,26 +260,26 @@ export function agentOpenApi(config: Config): object {
         ],
         get: kubernetesOperation(
           'getKubernetesResource',
-          scopes.kubernetesRead,
+          agentSecurity(scopes.kubernetesRead),
         ),
         post: kubernetesOperation(
           'createKubernetesResource',
-          scopes.kubernetesWrite,
+          agentSecurity(scopes.kubernetesWrite),
           true,
         ),
         put: kubernetesOperation(
           'replaceKubernetesResource',
-          scopes.kubernetesWrite,
+          agentSecurity(scopes.kubernetesWrite),
           true,
         ),
         patch: kubernetesOperation(
           'updateKubernetesResource',
-          scopes.kubernetesWrite,
+          agentSecurity(scopes.kubernetesWrite),
           true,
         ),
         delete: kubernetesOperation(
           'deleteKubernetesResource',
-          scopes.kubernetesWrite,
+          agentSecurity(scopes.kubernetesWrite),
         ),
       },
     },
@@ -316,12 +295,12 @@ function operation(
   summary: string,
   parameters: object[] = [],
   body = false,
-  scope?: string,
+  security?: object[],
 ): object {
   return {
     operationId,
     summary,
-    ...(scope ? { security: [{ oidc: [scope] }] } : {}),
+    ...(security ? { security } : {}),
     ...(parameters.length ? { parameters } : {}),
     ...(body
       ? {
@@ -347,14 +326,14 @@ function operation(
 
 function kubernetesOperation(
   operationId: string,
-  scope: string,
+  security: object[],
   body = false,
 ): object {
   return {
     operationId,
     summary: 'Invoke the Kubernetes API',
-    security: [{ oauth: [scope] }],
-    parameters: kubernetesQueryParameters(),
+    security,
+    parameters: [parameter('apiVersion'), ...kubernetesQueryParameters()],
     ...(body
       ? {
           requestBody: {

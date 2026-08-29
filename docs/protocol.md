@@ -1,20 +1,22 @@
 # HTTP protocol
 
-The Hub exposes two standard OAuth resources and one transparent Kubernetes path family. Successful API responses include `Request-Id`; failures use `application/problem+json`.
+The Hub exposes one OAuth protected resource and one transparent browser Kubernetes path family. The exact protected-resource URL is `{HUB_PUBLIC_URL}/api`; RFC 9728 discovery is at `/.well-known/oauth-protected-resource/api`, and the single OpenAPI document is at `/openapi.json`. Successful API responses include `Request-Id`; failures use `application/problem+json`.
 
-## Catalog resource
+All `/api` operations require the current `API-Version` header. Human callers use `Authorization: Bearer <access-token>`. Agent callers use `Authorization: DPoP <access-token>` plus a proof bound to the method, canonical URI, token hash, and Agent key. The shared audience does not weaken the authentication boundary: Agent requests have no Bearer fallback.
 
-Resource: `{HUB_PUBLIC_URL}/api/catalog`. Discovery is at `/.well-known/oauth-protected-resource/api/catalog`; OpenAPI is at `/openapi/catalog.json`. Requests require the current `API-Version` header.
+## Cluster catalog and audit
 
-| Method and path | Scope | Additional rule |
-| --- | --- | --- |
-| `GET /api/catalog/clusters` | `clusters:read` | any authenticated user |
-| `GET /api/catalog/clusters/{id}` | `clusters:read` | any authenticated user |
-| `PUT /api/catalog/clusters/{id}` | `clusters:write` | configured admin group and `If-Match`/`If-None-Match` |
-| `DELETE /api/catalog/clusters/{id}` | `clusters:write` | configured admin group and `If-Match` |
-| `GET /api/catalog/audit-events` | `audit-events:read` | configured admin group |
+Cluster and audit resources have one canonical URI regardless of caller type.
 
-Lists use cursor pagination. Cluster representations use an `ETag` derived from `resourceVersion`. Unknown input fields that represent removed credentials or connection modes are rejected instead of silently ignored.
+| Method and path | Scope | Accepted principal | Additional rule |
+| --- | --- | --- | --- |
+| `GET /api/clusters` | `clusters:read` | human or Agent | cursor pagination |
+| `GET /api/clusters/{id}` | `clusters:read` | human or Agent | returns `ETag` |
+| `PUT /api/clusters/{id}` | `clusters:write` | human | configured admin group and `If-Match`/`If-None-Match` |
+| `DELETE /api/clusters/{id}` | `clusters:write` | human | configured admin group and `If-Match` |
+| `GET /api/audit-events` | `audit-events:read` | human or Agent | configured admin group for humans |
+
+Lists use cursor pagination. Cluster representations use an `ETag` derived from `resourceVersion`. Unknown input fields that represent removed credentials or connection modes are rejected instead of silently ignored. Agent reads are recorded with their controller and actor identity.
 
 ## Human Kubernetes proxy
 
@@ -22,19 +24,15 @@ Path: `/clusters/{clusterId}/kubernetes/{kubernetesPath}`.
 
 The bearer credential must be a Kubernetes-audience Realmroot ID token. The suffix and query are forwarded unchanged to the selected `apiServerUrl`. The Hub verifies authentication and cluster availability; Kubernetes performs all resource authorization.
 
-## Agent resource
+## Agent Kubernetes proxy
 
-Resource: `{HUB_PUBLIC_URL}/api/agent`. Discovery is at `/.well-known/oauth-protected-resource/api/agent`; OpenAPI is at `/openapi/agent.json`.
+Path: `/api/clusters/{clusterId}/kubernetes/{kubernetesPath}`. It requires:
 
-Catalog and audit reads are available under `/api/agent/...`. Kubernetes access uses `/api/agent/clusters/{clusterId}/kubernetes/{kubernetesPath}` and requires:
-
-- `Authorization: DPoP <access-token>`;
-- a valid `DPoP` proof bound to method, canonical URI, token hash, and key;
-- the Hub Resource Server audience in the access token;
-- an authorized OAuth client and non-replayed proof;
+- a DPoP-bound Hub access token with the exact `{HUB_PUBLIC_URL}/api` audience;
+- a valid proof for the method and canonical URI, an authorized OAuth client, and a non-replayed proof;
 - `kubernetes:read` for safe reads or `kubernetes:write` for mutations and streaming write subresources.
 
-`exec`, `attach`, and `portforward` require `kubernetes:write` even when the HTTP handshake is `GET`. The verified access token is then forwarded as a Kubernetes bearer token. The DPoP proof itself is never forwarded. The target kube-apiserver performs its own audience validation and RBAC; clusters intended for Agent access must explicitly accept the Hub resource audience or another audience present in the token.
+`exec`, `attach`, and `portforward` require `kubernetes:write` even when the HTTP handshake is `GET`. The verified access token is forwarded as a Kubernetes bearer token; the DPoP proof is never forwarded. The target kube-apiserver independently validates its accepted audience and applies RBAC. Agent Kubernetes access therefore depends on Realmroot issuing a Hub token that kube-apiserver can also accept, as tracked by the token-exchange integration work.
 
 ## Header boundary
 

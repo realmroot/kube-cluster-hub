@@ -99,8 +99,9 @@ async function prepareUpgrade(
   const url = new URL(request.url || '/', runtime.config.publicUrl)
   const requestId = crypto.randomUUID()
   const headers = sanitizedHeaders(headersFromIncoming(request))
-  const agentMatch =
-    /^\/api\/agent\/clusters\/([^/]+)\/kubernetes(\/.*)?$/.exec(url.pathname)
+  const agentMatch = /^\/api\/clusters\/([^/]+)\/kubernetes(\/.*)?$/.exec(
+    url.pathname,
+  )
   const userMatch = /^\/clusters\/([^/]+)\/kubernetes(\/.*)?$/.exec(
     url.pathname,
   )
@@ -111,7 +112,7 @@ async function prepareUpgrade(
   const uri = `${match?.[2] || '/'}${url.search}`
   let principal: UserPrincipal | AgentPrincipal
   if (agentMatch) {
-    const canonical = `${runtime.config.resourceUrl}${url.pathname.slice('/api/agent'.length)}${url.search}`
+    const canonical = `${runtime.config.apiUrl}${url.pathname.slice('/api'.length)}${url.search}`
     principal = await runtime.dependencies.agents.verify(
       request.headers.authorization,
       header(request, 'dpop'),

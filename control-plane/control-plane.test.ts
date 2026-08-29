@@ -30,8 +30,6 @@ describe('combined control plane and data plane', () => {
       OIDC_ISSUER: 'https://identity.example.com',
       KUBERNETES_OIDC_AUDIENCE: 'kubernetes-client',
       CATALOG_ADMIN_GROUPS: 'platform-admins',
-      RESOURCE_SERVER_URL: 'https://gateway.example.com/api/agent',
-      RESOURCE_SERVER_ISSUER: 'https://identity.example.com',
       RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS: 'authorized-toolbox-client',
     })
     const user: UserPrincipal = {
@@ -44,7 +42,7 @@ describe('combined control plane and data plane', () => {
     const agent: AgentPrincipal = {
       type: 'agent',
       controllerSubject: 'controller-1',
-      actor: { issuer: config.resourceIssuer, subject: 'agent-1' },
+      actor: { issuer: config.oidcIssuer, subject: 'agent-1' },
       clientId: 'authorized-toolbox-client',
       scopes: [
         'clusters:read',
@@ -76,9 +74,84 @@ describe('combined control plane and data plane', () => {
 
   afterEach(() => database.raw.close())
 
+  it('publishes one Hub Resource Server contract', async () => {
+    const app = createApp(dependencies)
+    const root = await app.request('/api')
+    expect(root.status).toBe(200)
+    expect(root.headers.get('Link')).toBe(
+      '<https://gateway.example.com/openapi.json>; rel="service-desc"; type="application/vnd.oai.openapi+json"',
+    )
+    expect(await root.json()).toEqual({
+      resource: 'https://gateway.example.com/api',
+      serviceDescription: 'https://gateway.example.com/openapi.json',
+    })
+
+    const metadata = await app.request(
+      '/.well-known/oauth-protected-resource/api',
+    )
+    expect(await metadata.json()).toMatchObject({
+      resource: 'https://gateway.example.com/api',
+      authorization_servers: ['https://identity.example.com'],
+      scopes_supported: [
+        'clusters:read',
+        'clusters:write',
+        'kubernetes:read',
+        'kubernetes:write',
+        'audit-events:read',
+      ],
+    })
+
+    const contract = (await (await app.request('/openapi.json')).json()) as {
+      servers: { url: string }[]
+      paths: Record<string, unknown>
+    }
+    expect(contract.servers).toEqual([
+      { url: 'https://gateway.example.com/api' },
+    ])
+    expect(Object.keys(contract.paths)).toEqual([
+      '/clusters',
+      '/clusters/{clusterId}',
+      '/audit-events',
+      '/clusters/{clusterId}/kubernetes',
+      '/clusters/{clusterId}/kubernetes/{kubernetesPath}',
+    ])
+
+    expect((await app.request('/api/catalog')).status).toBe(404)
+    expect((await app.request('/api/agent')).status).toBe(404)
+  })
+
+  it('uses Bearer for human reads and DPoP for Agent reads on one URI', async () => {
+    await store.createCluster(
+      'development',
+      normalizeClusterInput(clusterInput()),
+    )
+    const app = createApp(dependencies)
+    const human = await app.request('/api/clusters', {
+      headers: catalogHeaders(),
+    })
+    expect(human.status).toBe(200)
+
+    const agent = await app.request('/api/clusters', {
+      headers: {
+        Authorization: 'DPoP agent-token',
+        DPoP: 'proof',
+        'API-Version': apiVersion,
+      },
+    })
+    expect(agent.status).toBe(200)
+    expect(await store.listAuditEvents(undefined, 10)).toEqual([
+      expect.objectContaining({
+        principalType: 'agent',
+        agentSubject: 'agent-1',
+        path: '/api/clusters',
+        status: 200,
+      }),
+    ])
+  })
+
   it('provides conditional catalog CRUD with admin authorization', async () => {
     const app = createApp(dependencies)
-    const created = await app.request('/api/catalog/clusters/development', {
+    const created = await app.request('/api/clusters/development', {
       method: 'PUT',
       headers: catalogHeaders({ 'If-None-Match': '*' }),
       body: JSON.stringify(clusterInput()),
@@ -97,16 +170,16 @@ describe('combined control plane and data plane', () => {
       }),
     )
     const list = await app.request(
-      'http://internal-worker/api/catalog/clusters?pageSize=1',
+      'http://internal-worker/api/clusters?pageSize=1',
       { headers: catalogHeaders() },
     )
     expect(list.status).toBe(200)
     expect(list.headers.get('Link')).toBe(
-      '<https://gateway.example.com/api/catalog/clusters?pageSize=1&pageToken=development>; rel="next"',
+      '<https://gateway.example.com/api/clusters?pageSize=1&pageToken=development>; rel="next"',
     )
     expect(await list.json()).toMatchObject({ items: [{ id: 'development' }] })
 
-    const denied = await app.request('/api/catalog/clusters/another', {
+    const denied = await app.request('/api/clusters/another', {
       method: 'PUT',
       headers: catalogHeaders({
         Authorization: 'Bearer viewer',
@@ -118,7 +191,7 @@ describe('combined control plane and data plane', () => {
     expect(denied.headers.get('Content-Type')).toContain(
       'application/problem+json',
     )
-    const stale = await app.request('/api/catalog/clusters/development', {
+    const stale = await app.request('/api/clusters/development', {
       method: 'PUT',
       headers: catalogHeaders({ 'If-Match': '"99"' }),
       body: JSON.stringify(clusterInput()),
@@ -156,8 +229,14 @@ describe('combined control plane and data plane', () => {
       normalizeClusterInput(clusterInput()),
     )
     const response = await createApp(dependencies).request(
-      '/api/agent/clusters/development/kubernetes/api/v1/namespaces',
-      { headers: { Authorization: 'DPoP external-token', DPoP: 'proof' } },
+      '/api/clusters/development/kubernetes/api/v1/namespaces',
+      {
+        headers: {
+          Authorization: 'DPoP external-token',
+          DPoP: 'proof',
+          'API-Version': apiVersion,
+        },
+      },
     )
     expect(response.status).toBe(200)
     expect(forwarded[0]?.url).toBe(
@@ -280,16 +359,28 @@ describe('combined control plane and data plane', () => {
     )
     const app = createApp(dependencies)
     const response = await app.request(
-      '/api/agent/clusters/development/kubernetes/api%2Fv1%2Fnamespaces',
-      { headers: { Authorization: 'DPoP token', DPoP: 'proof' } },
+      '/api/clusters/development/kubernetes/api%2Fv1%2Fnamespaces',
+      {
+        headers: {
+          Authorization: 'DPoP token',
+          DPoP: 'proof',
+          'API-Version': apiVersion,
+        },
+      },
     )
     expect(response.status).toBe(200)
     expect(forwarded[0]?.url).toBe(
       'https://kubernetes.example.test/api/v1/namespaces',
     )
     const traversal = await app.request(
-      '/api/agent/clusters/development/kubernetes/..%2Fsecrets',
-      { headers: { Authorization: 'DPoP token', DPoP: 'proof' } },
+      '/api/clusters/development/kubernetes/..%2Fsecrets',
+      {
+        headers: {
+          Authorization: 'DPoP token',
+          DPoP: 'proof',
+          'API-Version': apiVersion,
+        },
+      },
     )
     expect(traversal.status).toBe(400)
   })

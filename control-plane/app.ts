@@ -1,13 +1,6 @@
 import { Hono } from 'hono'
 import type { AppDependencies, Variables } from './app-dependencies'
-import {
-  agentOpenApi,
-  agentScopes,
-  apiVersion,
-  catalogOpenApi,
-  catalogScopes,
-  scopes,
-} from './contracts'
+import { apiVersion, hubOpenApi, hubScopes, scopes } from './contracts'
 import { installHttpBoundary, openApi } from './http'
 import { registerAccessRoutes } from './routes/access'
 import { registerCatalogRoutes } from './routes/catalog'
@@ -29,7 +22,7 @@ export function createApp(
     context.json({
       issuer: dependencies.config.oidcIssuer,
       clientId: dependencies.config.uiClientId,
-      resource: dependencies.config.catalogUrl,
+      resource: dependencies.config.apiUrl,
       scopes: [
         'openid',
         'profile',
@@ -42,47 +35,24 @@ export function createApp(
     }),
   )
 
-  app.get('/openapi/catalog.json', (context) =>
-    openApi(context, catalogOpenApi(dependencies.config)),
+  app.get('/openapi.json', (context) =>
+    openApi(context, hubOpenApi(dependencies.config)),
   )
-  app.get('/openapi/agent.json', (context) =>
-    openApi(context, agentOpenApi(dependencies.config)),
-  )
-  app.get('/.well-known/oauth-protected-resource/api/catalog', (context) =>
+  app.get('/.well-known/oauth-protected-resource/api', (context) =>
     context.json({
-      resource: dependencies.config.catalogUrl,
+      resource: dependencies.config.apiUrl,
       authorization_servers: [dependencies.config.oidcIssuer],
-      scopes_supported: catalogScopes,
+      scopes_supported: hubScopes,
       bearer_methods_supported: ['header'],
-    }),
-  )
-  app.get('/.well-known/oauth-protected-resource/api/agent', (context) =>
-    context.json({
-      resource: dependencies.config.resourceUrl,
-      authorization_servers: [dependencies.config.resourceIssuer],
-      scopes_supported: agentScopes,
-      dpop_bound_access_tokens_required: true,
       dpop_signing_alg_values_supported: ['ES256'],
     }),
   )
 
   serviceDescription(
     app,
-    '/api/catalog',
-    dependencies.config.catalogUrl,
-    `${dependencies.config.publicUrl}/openapi/catalog.json`,
-  )
-  serviceDescription(
-    app,
-    '/api/catalog/',
-    dependencies.config.catalogUrl,
-    `${dependencies.config.publicUrl}/openapi/catalog.json`,
-  )
-  serviceDescription(
-    app,
-    '/api/agent',
-    dependencies.config.resourceUrl,
-    `${dependencies.config.publicUrl}/openapi/agent.json`,
+    '/api',
+    dependencies.config.apiUrl,
+    `${dependencies.config.publicUrl}/openapi.json`,
   )
 
   registerCatalogRoutes(app, dependencies)

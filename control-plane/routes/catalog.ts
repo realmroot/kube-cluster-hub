@@ -1,52 +1,56 @@
 import type { AppDependencies, HubApp } from '../app-dependencies'
 import { scopes } from '../contracts'
+import type { AgentPrincipal, UserPrincipal } from '../domain'
 import { normalizeClusterInput, validateClusterId } from '../domain'
 import {
+  auditStatus,
   boundedJson,
   catalogVersion,
   etag,
   parseEtag,
   requireAdmin,
+  requireAgentScope,
   requireUserScope,
 } from '../http'
+import { auditForAgent, verifyAgent } from './access'
 import { auditPage, clusterPage } from './pages'
 
 export function registerCatalogRoutes(
   app: HubApp,
   dependencies: AppDependencies,
 ): void {
-  app.use('/api/catalog/clusters', catalogVersion)
-  app.use('/api/catalog/clusters/*', catalogVersion)
-  app.use('/api/catalog/audit-events', catalogVersion)
+  app.use('/api/clusters', catalogVersion)
+  app.use('/api/clusters/*', catalogVersion)
+  app.use('/api/audit-events', catalogVersion)
 
-  app.get('/api/catalog/clusters', async (context) => {
-    const user = await dependencies.catalogUsers.verify(
-      context.req.header('Authorization'),
-    )
-    requireUserScope(user, scopes.clustersRead)
-    return clusterPage(
+  app.get('/api/clusters', (context) =>
+    readForUserOrAgent(context, dependencies, scopes.clustersRead, '', () =>
+      clusterPage(
+        context,
+        dependencies.store,
+        `${dependencies.config.apiUrl}/clusters`,
+      ),
+    ),
+  )
+
+  app.get('/api/clusters/:clusterId', (context) =>
+    readForUserOrAgent(
       context,
-      dependencies.store,
-      `${dependencies.config.catalogUrl}/clusters`,
-    )
-  })
-
-  app.get('/api/catalog/clusters/:clusterId', async (context) => {
-    const user = await dependencies.catalogUsers.verify(
-      context.req.header('Authorization'),
-    )
-    requireUserScope(user, scopes.clustersRead)
-    const cluster = await dependencies.store.getCluster(
+      dependencies,
+      scopes.clustersRead,
       context.req.param('clusterId'),
-    )
-    context.header('ETag', etag(cluster.resourceVersion))
-    return context.json(cluster)
-  })
+      async () => {
+        const cluster = await dependencies.store.getCluster(
+          context.req.param('clusterId'),
+        )
+        context.header('ETag', etag(cluster.resourceVersion))
+        return context.json(cluster)
+      },
+    ),
+  )
 
-  app.put('/api/catalog/clusters/:clusterId', async (context) => {
-    const user = await dependencies.catalogUsers.verify(
-      context.req.header('Authorization'),
-    )
+  app.put('/api/clusters/:clusterId', async (context) => {
+    const user = await verifyCatalogUser(context, dependencies)
     requireUserScope(user, scopes.clustersWrite)
     requireAdmin(user, dependencies.config)
     const id = context.req.param('clusterId')
@@ -65,10 +69,8 @@ export function registerCatalogRoutes(
     return context.json(cluster, ifNoneMatch === '*' ? 201 : 200)
   })
 
-  app.delete('/api/catalog/clusters/:clusterId', async (context) => {
-    const user = await dependencies.catalogUsers.verify(
-      context.req.header('Authorization'),
-    )
+  app.delete('/api/clusters/:clusterId', async (context) => {
+    const user = await verifyCatalogUser(context, dependencies)
     requireUserScope(user, scopes.clustersWrite)
     requireAdmin(user, dependencies.config)
     const id = context.req.param('clusterId')
@@ -79,16 +81,64 @@ export function registerCatalogRoutes(
     return context.body(null, 204)
   })
 
-  app.get('/api/catalog/audit-events', async (context) => {
-    const user = await dependencies.catalogUsers.verify(
-      context.req.header('Authorization'),
-    )
-    requireUserScope(user, scopes.auditRead)
-    requireAdmin(user, dependencies.config)
-    return auditPage(
+  app.get('/api/audit-events', (context) =>
+    readForUserOrAgent(
       context,
-      dependencies.store,
-      `${dependencies.config.catalogUrl}/audit-events`,
-    )
-  })
+      dependencies,
+      scopes.auditRead,
+      '',
+      (principal) => {
+        if (principal.type === 'user')
+          requireAdmin(principal, dependencies.config)
+        return auditPage(
+          context,
+          dependencies.store,
+          `${dependencies.config.apiUrl}/audit-events`,
+        )
+      },
+    ),
+  )
+}
+
+async function readForUserOrAgent(
+  context: Parameters<typeof verifyAgent>[0],
+  dependencies: AppDependencies,
+  scope: string,
+  clusterId: string,
+  read: (principal: UserPrincipal | AgentPrincipal) => Promise<Response>,
+): Promise<Response> {
+  const started = Date.now()
+  const authorization = context.req.header('Authorization') || ''
+  const principal = authorization.startsWith('DPoP ')
+    ? await verifyAgent(context, dependencies)
+    : await verifyCatalogUser(context, dependencies)
+  let status = 403
+  try {
+    if (principal.type === 'agent') requireAgentScope(principal, scope)
+    else requireUserScope(principal, scope)
+    const response = await read(principal)
+    status = response.status
+    return response
+  } catch (error) {
+    status = auditStatus(error, status)
+    throw error
+  } finally {
+    if (principal.type === 'agent')
+      await dependencies.store.appendAudit(
+        auditForAgent(
+          context,
+          principal,
+          clusterId,
+          status,
+          Date.now() - started,
+        ),
+      )
+  }
+}
+
+function verifyCatalogUser(
+  context: Parameters<typeof verifyAgent>[0],
+  dependencies: AppDependencies,
+): Promise<UserPrincipal> {
+  return dependencies.catalogUsers.verify(context.req.header('Authorization'))
 }

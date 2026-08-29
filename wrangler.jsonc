@@ -18,8 +18,6 @@
     "KUBERNETES_OIDC_AUDIENCE": "01a046ca-bfb8-72fe-b85b-36cf0052edcf",
     "OIDC_GROUPS_CLAIM": "groups",
     "CATALOG_ADMIN_GROUPS": "platform-admins",
-    "RESOURCE_SERVER_URL": "https://kube-cluster-hub.saltbo.workers.dev/api/agent",
-    "RESOURCE_SERVER_ISSUER": "https://id.realmroot.dev/api/auth",
     "RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS": "realmroot-cli",
     "RESOURCE_SERVER_JWT_ALGORITHMS": "RS256",
     "AUDIT_RETENTION": "2160h"

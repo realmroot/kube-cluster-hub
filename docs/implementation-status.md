@@ -9,8 +9,8 @@ Kube Cluster Hub is a stable, horizontally scalable cluster catalog and Kubernet
 | Area | Result |
 | --- | --- |
 | Deployment shape | `control-plane/` and `data-plane/` are logical modules in the same Worker/Node artifact and scale together. |
-| Human access | Separate catalog access-token and Kubernetes ID-token verification; verified Kubernetes token is forwarded directly. |
-| Agent access | RFC 9728/OpenAPI discovery, authorized-client and scope enforcement, DPoP verification/replay persistence, Hub audience validation, direct token forwarding, Kubernetes-owned audience/RBAC validation, attributed audit. |
+| Human access | Hub access-token verification for catalog operations and separate Kubernetes ID-token verification; verified Kubernetes token is forwarded directly. |
+| Agent access | The same Hub Resource Server publishes RFC 9728/OpenAPI discovery; Agent routes additionally enforce authorized-client, scope, DPoP/replay, actor/controller identity and attributed audit before direct token forwarding. |
 | Catalog | Credential-free cluster resources with one required reachable API origin and optimistic concurrency. |
 | Proxy | Streaming HTTP for Worker/Node and native Node WebSocket upgrades; dangerous forwarding/impersonation headers stripped. |
 | Persistence | D1 on Worker, PostgreSQL for replicated Node/Docker, SQLite for local single-process development. |

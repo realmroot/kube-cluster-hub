@@ -58,7 +58,7 @@ describe('Node HTTP Upgrade proxy', () => {
     const readOnlyAgent: AgentPrincipal = {
       type: 'agent',
       controllerSubject: 'controller-1',
-      actor: { issuer: config.resourceIssuer, subject: 'agent-1' },
+      actor: { issuer: config.oidcIssuer, subject: 'agent-1' },
       clientId: 'authorized-toolbox-client',
       scopes: ['kubernetes:read'],
       scope: 'kubernetes:read',
@@ -97,7 +97,7 @@ describe('Node HTTP Upgrade proxy', () => {
 
     const denied = await rawUpgrade(
       hubPort,
-      '/api/agent/clusters/development/kubernetes/api/v1/namespaces/default/pods/app/exec?command=sh',
+      '/api/clusters/development/kubernetes/api/v1/namespaces/default/pods/app/exec?command=sh',
       'DPoP agent-token',
       'proof',
     )
@@ -113,7 +113,6 @@ function testConfig(): Config {
     OIDC_ISSUER: 'https://identity.example.test',
     KUBERNETES_OIDC_AUDIENCE: 'kubernetes-client',
     CATALOG_ADMIN_GROUPS: 'platform-admins',
-    RESOURCE_SERVER_ISSUER: 'https://identity.example.test',
     RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS: 'authorized-toolbox-client',
   })
 }

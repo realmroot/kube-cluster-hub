@@ -84,8 +84,32 @@ describe('OIDC and OAuth Agent authentication', () => {
     )
   })
 
+  it('rejects a DPoP-bound access token on the human Bearer boundary', async () => {
+    const verifier = new UserVerifier(
+      await discoverIssuer(issuer),
+      'https://gateway.example.com/api',
+      'groups',
+      'access',
+    )
+    const token = await new SignJWT({
+      scope: 'clusters:read',
+      cnf: { jkt: 'agent-key-thumbprint' },
+    })
+      .setProtectedHeader({ alg: 'RS256', kid: signingKid, typ: 'at+jwt' })
+      .setIssuer(issuer)
+      .setAudience('https://gateway.example.com/api')
+      .setSubject('controller-1')
+      .setIssuedAt()
+      .setExpirationTime('5m')
+      .sign(signingKey)
+
+    await expect(verifier.verify(`Bearer ${token}`)).rejects.toThrow(
+      'DPoP-bound access token cannot be used as Bearer',
+    )
+  })
+
   it('validates DPoP binding, Agent actor identity, scope, and replay', async () => {
-    const resource = 'https://gateway.example.com/api/agent'
+    const resource = 'https://gateway.example.com/api'
     const proofPair = await generateKeyPair('ES256', { extractable: true })
     const proofPublicJwk = await exportJWK(proofPair.publicKey)
     const thumbprint = await calculateJwkThumbprint(proofPublicJwk)

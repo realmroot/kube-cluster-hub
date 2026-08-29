@@ -6,8 +6,7 @@ import type { DatabaseAdapter } from './database'
 import { type HubStore, Store } from './store'
 
 export interface IdentityRuntime {
-  userIssuer: Awaited<ReturnType<typeof discoverIssuer>>
-  agentIssuer: Awaited<ReturnType<typeof discoverIssuer>>
+  issuer: Awaited<ReturnType<typeof discoverIssuer>>
 }
 
 export interface Runtime {
@@ -20,15 +19,7 @@ export interface Runtime {
 export async function prepareIdentity(
   config: Config,
 ): Promise<IdentityRuntime> {
-  const userIssuer = await discoverIssuer(config.oidcIssuer)
-  const agentIssuer =
-    config.resourceIssuer === config.oidcIssuer
-      ? userIssuer
-      : await discoverIssuer(config.resourceIssuer)
-  return {
-    userIssuer,
-    agentIssuer,
-  }
+  return { issuer: await discoverIssuer(config.oidcIssuer) }
 }
 
 export async function bootstrap(
@@ -45,22 +36,22 @@ export async function bootstrap(
     config,
     store,
     catalogUsers: new UserVerifier(
-      identity.userIssuer,
-      config.catalogUrl,
+      identity.issuer,
+      config.apiUrl,
       config.oidcGroupsClaim,
       'access',
     ),
     kubernetesUsers: new UserVerifier(
-      identity.userIssuer,
+      identity.issuer,
       config.oidcAudience,
       config.oidcGroupsClaim,
       'id',
     ),
     agents: new AgentVerifier(
-      identity.agentIssuer,
-      config.resourceUrl,
-      config.resourceAuthorizedClients,
-      config.resourceSigningAlgorithms,
+      identity.issuer,
+      config.apiUrl,
+      config.agentAuthorizedClients,
+      config.agentSigningAlgorithms,
       store,
     ),
     proxy,

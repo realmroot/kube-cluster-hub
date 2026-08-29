@@ -15,8 +15,6 @@ data:
   KUBERNETES_OIDC_AUDIENCE: kubernetes-client
   OIDC_GROUPS_CLAIM: groups
   CATALOG_ADMIN_GROUPS: platform-admins
-  RESOURCE_SERVER_URL: https://clusters.example.com/api/agent
-  RESOURCE_SERVER_ISSUER: https://identity.example.com
   RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS: authorized-toolbox-client
   RESOURCE_SERVER_JWT_ALGORITHMS: RS256
   AUDIT_RETENTION: 2160h
