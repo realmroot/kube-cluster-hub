@@ -15,6 +15,7 @@ export function createApp(
 
   app.get('/healthz', (context) => context.body(null, 204))
   app.get('/readyz', async (context) => {
+    if (dependencies.isReady?.() === false) return context.body(null, 503)
     await dependencies.store.listClusters('', 1)
     return context.body(null, 204)
   })
@@ -27,6 +28,7 @@ export function createApp(
         'openid',
         'profile',
         'email',
+        'offline_access',
         scopes.clustersRead,
         scopes.clustersWrite,
         scopes.auditRead,

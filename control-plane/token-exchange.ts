@@ -75,13 +75,19 @@ export class AgentTokenExchanger {
       )
     }
     const exchange = record(payload)
+    const grantedScopes =
+      typeof exchange?.scope === 'string'
+        ? new Set(exchange.scope.split(/\s+/).filter(Boolean))
+        : new Set<string>()
     if (
       exchange?.issued_token_type !== idTokenType ||
-      exchange.token_type !== 'Bearer' ||
+      typeof exchange.token_type !== 'string' ||
+      exchange.token_type.toLowerCase() !== 'bearer' ||
       typeof exchange.access_token !== 'string' ||
       typeof exchange.expires_in !== 'number' ||
       exchange.expires_in <= 0 ||
-      exchange.scope !== 'openid groups'
+      !grantedScopes.has('openid') ||
+      !grantedScopes.has('groups')
     ) {
       throw new TokenExchangeError(
         'invalid_response',

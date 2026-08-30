@@ -12,7 +12,7 @@ Before upgrade, back up D1 or SQLite and export the cluster catalog. After upgra
 1. apply all D1 migrations, or start one Node instance to apply SQLite migrations;
 2. configure a reachable, trusted `apiServerUrl` for every disabled cluster;
 3. configure Realmroot OIDC directly on every kube-apiserver and bind Realmroot groups with Kubernetes RBAC;
-4. configure each kube-apiserver to accept the Hub resource audience for Agent access and map the token's Kubernetes identity/group claims;
+4. configure each kube-apiserver to accept the Kubernetes audience, authorize Realmroot token exchange from the Hub Resource Server to that audience, and map the exchanged token's identity/group claims;
 5. test reads and mutations as a real user and Agent;
 6. remove Connector Deployments, ServiceAccounts, status secrets, dispatch keys, and Connector-specific RBAC from managed clusters.
 

@@ -4,7 +4,7 @@ import { D1DatabaseAdapter } from './database-d1'
 import { isFrontendNavigation, serveFrontend } from './frontend'
 import { WorkerInventoryKubernetesClient } from './inventory-worker'
 
-type WorkerEnv = Cloudflare.Env
+type WorkerEnv = Cloudflare.Env & ConfigSource
 
 let identityCache:
   | { fingerprint: string; promise: Promise<IdentityRuntime> }
@@ -34,7 +34,7 @@ export default {
       const identity = await identityFor(env, ctx)
       const runtime = await bootstrap(
         new D1DatabaseAdapter(env.DB),
-        env satisfies ConfigSource,
+        env,
         (input, init) => fetch(input, init),
         identity,
         loadConfig(env).inventory.enabled
@@ -76,7 +76,7 @@ export default {
     const identity = await identityFor(env, ctx)
     const runtime = await bootstrap(
       new D1DatabaseAdapter(env.DB),
-      env satisfies ConfigSource,
+      env,
       (input, init) => fetch(input, init),
       identity,
       loadConfig(env).inventory.enabled

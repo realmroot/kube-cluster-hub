@@ -1,0 +1,18 @@
+# Required after the Worker URL and Realmroot integrations are known.
+HUB_PUBLIC_URL=https://clusters.example.com
+HUB_UI_CLIENT_ID=your-public-spa-client-id
+OIDC_ISSUER=https://id.realmroot.dev/api/auth
+CATALOG_ADMIN_GROUPS=platform-admins
+RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS=realmroot-cli
+TOKEN_EXCHANGE_CLIENT_ID=your-machine-client-id
+TOKEN_EXCHANGE_CLIENT_SECRET=replace-me
+
+# Optional defaults.
+# OIDC_GROUPS_CLAIM=groups
+# KUBERNETES_OIDC_AUDIENCE=your-separate-kubernetes-client-id
+# RESOURCE_SERVER_JWT_ALGORITHMS=RS256
+# CLUSTER_ENDPOINT_ALLOWLIST=https://api.example.com:6443
+# AUDIT_RETENTION=2160h
+# INVENTORY_ENABLED=false
+# INVENTORY_NAMESPACE=cluster-inventory
+# INVENTORY_KUBECONFIG=

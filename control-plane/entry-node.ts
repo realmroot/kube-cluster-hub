@@ -1,9 +1,12 @@
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
+import type { Variables } from './app-dependencies'
 import { bootstrap } from './bootstrap'
 import { loadConfig } from './config'
 import type { DatabaseAdapter } from './database'
+import { isFrontendNavigation } from './frontend'
+import { hubNotFound } from './http'
 import { attachNodeUpgradeHandler } from './upgrade-node'
 
 const databaseUrl = process.env.HUB_DATABASE_URL?.trim()
@@ -35,12 +38,14 @@ const inventoryClient = nodeConfig.inventory.enabled
       nodeConfig,
     )
   : undefined
+let ready = true
 const runtime = await bootstrap(
   database,
   process.env,
   fetch,
   undefined,
   inventoryClient,
+  () => ready,
 )
 
 await runtime.store.pruneAudit(
@@ -48,15 +53,23 @@ await runtime.store.pruneAudit(
 )
 await runtime.dependencies.inventory?.reconcile()
 
-const port = Number(process.env.PORT || process.env.HUB_PORT || '8080')
-const nodeApp = new Hono()
+const port = Number(process.env.PORT || '8080')
+const nodeApp = new Hono<{ Variables: Variables }>()
 nodeApp.use('/assets/*', serveStatic({ root: './dist/client' }))
-for (const path of ['/', '/auth/callback', '/clusters', '/audit']) {
-  nodeApp.get(path, serveStatic({ root: './dist/client', path: 'index.html' }))
-}
+nodeApp.get('*', async (context, next) => {
+  if (!isFrontendNavigation(context.req.raw)) return next()
+  return serveStatic({ root: './dist/client', path: 'index.html' })(
+    context,
+    next,
+  )
+})
 nodeApp.route('/', runtime.app)
+nodeApp.notFound(hubNotFound)
 const server = serve({ fetch: nodeApp.fetch, port })
-attachNodeUpgradeHandler(server as import('node:http').Server, runtime)
+const upgradeLifecycle = attachNodeUpgradeHandler(
+  server as import('node:http').Server,
+  runtime,
+)
 console.log(
   JSON.stringify({ message: 'control-plane.started', runtime: 'node', port }),
 )
@@ -94,32 +107,52 @@ const inventoryReconciliation = runtime.dependencies.inventory
     )
   : undefined
 
-for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.once(signal, () => {
-    clearInterval(retention)
-    if (inventoryReconciliation) clearInterval(inventoryReconciliation)
-    server.close((error) => {
-      if (error) {
-        console.error(
-          JSON.stringify({
-            message: 'control-plane.shutdown.error',
-            error: error.message,
-          }),
+let shutdownStarted = false
+for (const signal of ['SIGINT', 'SIGTERM'] as const)
+  process.once(signal, () => void shutdown(signal))
+
+async function shutdown(signal: 'SIGINT' | 'SIGTERM'): Promise<void> {
+  if (shutdownStarted) return
+  shutdownStarted = true
+  ready = false
+  clearInterval(retention)
+  if (inventoryReconciliation) clearInterval(inventoryReconciliation)
+  console.log(
+    JSON.stringify({ message: 'control-plane.shutdown.started', signal }),
+  )
+  const deadlineMillis = 25_000
+  let deadline: NodeJS.Timeout | undefined
+  try {
+    await Promise.race([
+      Promise.all([
+        closeHttpServer(server as import('node:http').Server),
+        upgradeLifecycle.close(5_000),
+      ]).then(() => closeDatabase()),
+      new Promise<never>((_resolve, reject) => {
+        deadline = setTimeout(
+          () => reject(new Error('shutdown deadline exceeded')),
+          deadlineMillis,
         )
-        process.exitCode = 1
-      }
-      void closeDatabase().catch((closeError: unknown) => {
-        console.error(
-          JSON.stringify({
-            message: 'database.shutdown.error',
-            error:
-              closeError instanceof Error
-                ? closeError.message
-                : String(closeError),
-          }),
-        )
-        process.exitCode = 1
-      })
-    })
+        deadline.unref()
+      }),
+    ])
+    console.log(JSON.stringify({ message: 'control-plane.shutdown.completed' }))
+  } catch (error) {
+    process.exitCode = 1
+    console.error(
+      JSON.stringify({
+        message: 'control-plane.shutdown.error',
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    )
+  } finally {
+    if (deadline) clearTimeout(deadline)
+  }
+}
+
+function closeHttpServer(server: import('node:http').Server): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()))
+    server.closeIdleConnections()
   })
 }

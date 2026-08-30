@@ -1,39 +1,48 @@
 # Kube Cluster Hub
 
-Kube Cluster Hub is a small cluster catalog and authenticated Kubernetes API gateway. It lets dashboards such as Kite and authorized Realmroot Agents discover clusters and access their APIs without storing kubeconfigs, ServiceAccount tokens, or a second authorization model.
+Kube Cluster Hub is a self-hosted cluster catalog and authenticated Kubernetes API gateway for Realmroot users and teams. It gives dashboards and authorized Agents one credential-free directory of clusters while Kubernetes RBAC remains the final authority for every resource operation.
 
-The control-plane routes and Kubernetes data-plane proxy are separate TypeScript modules, but they run in the same Worker or Node process and scale together. Network reachability is deployment infrastructure: expose a reachable Kubernetes API endpoint to the Hub.
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/realmroot/kube-cluster-hub)
 
-## What it provides
+You deploy one Hub for your own organization and connect it to your own Realmroot tenant and Kubernetes clusters. It is not a shared hosted service.
 
-- Realmroot OAuth 2.1/OIDC login with Authorization Code + PKCE
-- versioned cluster catalog CRUD and optimistic concurrency
-- human Kubernetes ID-token passthrough and Agent RFC 8693 exchange; Kubernetes RBAC remains authoritative
-- one Hub Resource Server for human and DPoP-protected Agent access, with OpenAPI and RFC 9728 discovery
-- Agent-attributed audit events
-- HTTP streaming and Node WebSocket upgrades for Kubernetes subresources
-- one React/Vite administration UI
-- horizontally scalable Cloudflare Worker/D1 and Node/PostgreSQL deployments
-- optional publication of the catalog as standard Cluster Inventory `ClusterProfile` resources
+## What it does
 
-It deliberately does not provide a Connector, dispatch-token protocol, a target-cluster credential, an informer layer, or an additional RBAC database. The optional Inventory publisher uses a deployment-scoped, read/write credential only for `ClusterProfile` resources in one inventory namespace.
+- signs humans in with standard OAuth 2.1/OIDC Authorization Code + PKCE;
+- stores cluster names, API server addresses, and dashboard metadata—but no cluster credentials;
+- proxies Kubernetes HTTP streams and WebSocket subresources;
+- exchanges Agent access tokens for Kubernetes-audience ID tokens through RFC 8693;
+- publishes RFC 9728 metadata and OpenAPI for Realmroot Toolbox discovery;
+- records Agent-attributed and catalog-administration audit events;
+- optionally publishes the catalog as Cluster Inventory `ClusterProfile` resources;
+- runs as a combined control plane/data plane on Cloudflare Workers or Node/Docker and scales horizontally.
 
-## Architecture
+The Hub does not add another Kubernetes permission database, run informers, manage tunnels, or install a proprietary Connector. The deployment must be able to reach each configured kube-apiserver; Cloudflare Tunnel, a private network, or another standard networking product can provide that path.
 
-```text
-Kite / browser ─┐
-Realmroot Agent ├─> Kube Cluster Hub ─> reachable kube-apiserver
-catalog client ─┘       │
-                       D1 or PostgreSQL
-                           │
-                           └─> Cluster Inventory API ─> Kite / other dashboards
-```
+## Identity and authorization
 
-Humans use a Hub-audience access token for catalog operations and a Realmroot ID token whose audience is the Kubernetes OIDC client for Kubernetes operations. Agents use a DPoP-bound Hub access token for Hub discovery and operations. The Hub verifies that boundary, exchanges the Agent token at Realmroot for a Kubernetes-audience ID token, strips untrusted forwarding and impersonation headers, and sends only the exchanged credential to Kubernetes. The target kube-apiserver validates it and applies RBAC. See [docs/architecture.md](docs/architecture.md).
+Humans use a public Realmroot SPA Application. Catalog access is authorized by the Hub's configured administrator groups; Kubernetes access is authorized by the target cluster's RBAC using the user's OIDC identity and groups.
 
-## Local development
+Agents receive a DPoP-bound access token for the Hub Resource Server. The Hub validates it, exchanges it for a Kubernetes-audience ID token, and forwards only the exchanged token. The target kube-apiserver validates the identity again and applies RBAC. By default the SPA and Kubernetes share one public client ID; a separate Kubernetes audience is an optional override.
 
-Requirements: Node.js 26, pnpm 11, and Docker for container or PostgreSQL testing.
+## Deploy
+
+Cloudflare Workers is the shortest production path. The Deploy Button provisions the Worker and D1 database from [`wrangler.toml`](wrangler.toml); no account ID or D1 database ID is committed to this repository.
+
+Node/Docker uses SQLite for single-process development or PostgreSQL for horizontally scaled production replicas.
+
+Read [Deployment](docs/deployment.md) for the Realmroot registrations, seven required settings, Kubernetes OIDC/RBAC setup, Worker deployment, and Node/Docker deployment.
+
+## Dashboard integrations
+
+- [LightKite](https://github.com/realmroot/lightkite) is the fully validated dashboard integration. It can consume the Hub catalog and proxy without storing kubeconfigs.
+- [Headlamp](https://github.com/kubernetes-sigs/headlamp) is the community-maintained dashboard we have validated against the Cluster Inventory direction. Stock Headlamp can still load clusters through its existing kubeconfig/dynamic-cluster mechanisms; automatic Hub Inventory discovery depends on the corresponding upstream integration being available.
+
+The interoperability boundary is standard OIDC, Kubernetes API behavior, Cluster Inventory resources, RFC 9728, and OpenAPI—not a private dashboard protocol. See [Protocol](docs/protocol.md), [Architecture](docs/architecture.md), and [Operations](docs/operations.md).
+
+## Develop
+
+Requirements: Node.js 26, pnpm 11, and Docker when testing the container or PostgreSQL path.
 
 ```bash
 cp .env.example .env
@@ -41,31 +50,16 @@ pnpm install
 make run
 ```
 
-`make run` starts the Vite/Worker development runtime. `make run-node` starts the Node runtime with the SQLite development database configured by `HUB_DATABASE_DSN`.
+`make run` starts the Worker/Vite development runtime. `make run-node` starts the Node runtime with a local SQLite database.
 
 ```bash
 make verify
 make image
 ```
 
-## Deployment
+## Project status
 
-Cloudflare Workers use D1 and scale as one combined service:
-
-```bash
-pnpm wrangler d1 migrations apply kube-cluster-hub --remote
-pnpm deploy
-```
-
-Node/Docker supports SQLite for one-process development and PostgreSQL for production replicas. Set `HUB_DATABASE_URL` to a PostgreSQL URL; every replica runs the same control-plane and data-plane code. The Kubernetes reference manifest expects that URL in the `kube-cluster-hub-secrets` Secret and starts two replicas.
-
-Set `INVENTORY_ENABLED=true` to project enabled catalog entries into an Inventory Kubernetes API. Node supports in-cluster credentials or a kubeconfig; Workers support a bearer-token kubeconfig to a publicly trusted HTTPS API endpoint. This integration is optional and does not change the Hub catalog or proxy protocol.
-
-See [docs/deployment.md](docs/deployment.md), [docs/protocol.md](docs/protocol.md), and [docs/implementation-status.md](docs/implementation-status.md).
-
-## Toolchain
-
-The project uses TypeScript 7.0.2, Node.js 26, pnpm 11.24, Vite 8, React 19, Hono 4, Vitest 4, Biome 2, Knip, Drizzle ORM, Wrangler 4, D1, SQLite, and PostgreSQL. Dependency versions are locked by `pnpm-lock.yaml` and monitored by Dependabot.
+The implementation and external deployment prerequisites are tracked in [Implementation status](docs/implementation-status.md). Kubernetes compatibility is intentionally centered on standard API proxy behavior, OIDC, RBAC, and Cluster Inventory rather than Kubernetes-version-specific product logic.
 
 ## License
 

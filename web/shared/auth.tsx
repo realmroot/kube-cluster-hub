@@ -39,7 +39,8 @@ export function AuthProvider({
         extraTokenParams: { resource: config.resource },
         stateStore: new WebStorageStateStore({ store: sessionStorage }),
         userStore: new WebStorageStateStore({ store: sessionStorage }),
-        automaticSilentRenew: false,
+        automaticSilentRenew: true,
+        accessTokenExpiringNotificationTimeInSeconds: 60,
         monitorSession: false,
       }),
     [config],
@@ -50,15 +51,39 @@ export function AuthProvider({
 
   useEffect(() => {
     let active = true
+    const loaded = (next: User) => {
+      if (!active) return
+      setUser(next)
+      setError('')
+    }
+    const unloaded = () => {
+      if (active) setUser(null)
+    }
+    const expired = () => {
+      if (!active) return
+      setUser(null)
+      setError('Your session expired. Sign in again to continue.')
+    }
+    const renewalFailed = () => {
+      if (active)
+        setError(
+          'Session renewal failed. Check your connection or sign in again.',
+        )
+    }
+    manager.events.addUserLoaded(loaded)
+    manager.events.addUserUnloaded(unloaded)
+    manager.events.addAccessTokenExpired(expired)
+    manager.events.addSilentRenewError(renewalFailed)
     async function restore() {
       try {
-        const current =
+        let current =
           location.pathname === '/auth/callback'
             ? await manager.signinRedirectCallback()
             : await manager.getUser()
         if (location.pathname === '/auth/callback')
           history.replaceState({}, '', '/')
-        if (active) setUser(current?.expired ? null : current)
+        if (current?.expired) current = await manager.signinSilent()
+        if (active) setUser(current)
       } catch (cause) {
         if (active)
           setError(cause instanceof Error ? cause.message : 'Sign-in failed')
@@ -69,6 +94,11 @@ export function AuthProvider({
     void restore()
     return () => {
       active = false
+      manager.events.removeUserLoaded(loaded)
+      manager.events.removeUserUnloaded(unloaded)
+      manager.events.removeAccessTokenExpired(expired)
+      manager.events.removeSilentRenewError(renewalFailed)
+      manager.stopSilentRenew()
     }
   }, [manager])
 

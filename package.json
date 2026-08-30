@@ -7,22 +7,58 @@
   "engines": {
     "node": ">=26"
   },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/realmroot/kube-cluster-hub.git"
+  },
+  "bugs": {
+    "url": "https://github.com/realmroot/kube-cluster-hub/issues"
+  },
+  "cloudflare": {
+    "bindings": {
+      "HUB_PUBLIC_URL": {
+        "description": "The final public HTTPS origin of this Hub. Create the Realmroot redirect and Resource Server registrations with this exact origin."
+      },
+      "HUB_UI_CLIENT_ID": {
+        "description": "Realmroot public SPA Application client ID. It is also the default Kubernetes OIDC audience."
+      },
+      "OIDC_ISSUER": {
+        "description": "Realmroot issuer, normally `https://id.realmroot.dev/api/auth`."
+      },
+      "CATALOG_ADMIN_GROUPS": {
+        "description": "Comma-separated Realmroot groups allowed to change the cluster catalog and read audit events."
+      },
+      "RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS": {
+        "description": "Comma-separated Realmroot Toolbox/controller OAuth client IDs allowed to call Agent routes."
+      },
+      "TOKEN_EXCHANGE_CLIENT_ID": {
+        "description": "Realmroot Machine Application client ID authorized for Hub-to-Kubernetes token exchange."
+      },
+      "TOKEN_EXCHANGE_CLIENT_SECRET": {
+        "description": "One-time secret from the Realmroot Machine Application. Store it only as a Worker secret."
+      }
+    }
+  },
   "scripts": {
-    "dev": "vite",
+    "dev": "wrangler d1 migrations apply DB --local && vite",
     "dev:node": "tsx --env-file-if-exists=.env control-plane/entry-node.ts",
     "build": "vite build",
     "build:node": "tsup control-plane/entry-node.ts --format esm --out-dir dist-node --external better-sqlite3",
     "build:worker": "vite build",
+    "check:deploy": "wrangler deploy --dry-run",
+    "check:worker-types": "wrangler types --include-env=false --check",
     "preview": "vite preview",
-    "deploy": "vite build && wrangler deploy",
+    "deploy": "vite build && wrangler d1 migrations apply DB --remote && wrangler deploy",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --config vitest.config.ts",
+    "test:e2e": "vitest run --config vitest.config.ts control-plane/control-plane.test.ts",
     "test:coverage": "vitest run --config vitest.config.ts --coverage",
     "test:worker": "vitest run --config vitest.worker.config.ts",
     "lint:dead-code": "knip",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "worker:types": "wrangler types"
+    "worker:types": "wrangler types --include-env=false"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",

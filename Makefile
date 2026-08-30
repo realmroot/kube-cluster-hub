@@ -32,10 +32,13 @@ build-worker:
 
 verify:
 	pnpm exec biome check .
+	pnpm lint:dead-code
+	pnpm check:worker-types
 	pnpm typecheck
 	pnpm test
 	pnpm test:worker
 	$(MAKE) build
+	pnpm check:deploy
 
 image:
 	docker build -t kube-cluster-hub:dev .

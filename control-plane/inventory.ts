@@ -40,17 +40,6 @@ export interface InventoryKubernetesClient {
   deleteClusterProfile(namespace: string, name: string): Promise<void>
 }
 
-export class InventoryPublicationError extends Error {
-  constructor(cause: unknown) {
-    super(
-      'Catalog change was stored, but ClusterProfile publication is pending',
-      {
-        cause,
-      },
-    )
-  }
-}
-
 export class InventoryPublisher {
   constructor(
     private readonly config: Config,

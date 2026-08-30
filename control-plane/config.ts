@@ -9,6 +9,7 @@ export interface ConfigSource {
   RESOURCE_SERVER_JWT_ALGORITHMS?: string
   TOKEN_EXCHANGE_CLIENT_ID?: string
   TOKEN_EXCHANGE_CLIENT_SECRET?: string
+  CLUSTER_ENDPOINT_ALLOWLIST?: string
   AUDIT_RETENTION?: string
   INVENTORY_ENABLED?: string
   INVENTORY_NAMESPACE?: string
@@ -28,6 +29,7 @@ export interface Config {
   agentSigningAlgorithms: readonly string[]
   tokenExchangeClientId: string
   tokenExchangeClientSecret: string
+  clusterEndpointAllowlist: ReadonlySet<string>
   auditRetentionMs: number
   inventory: {
     enabled: boolean
@@ -43,18 +45,16 @@ export function loadConfig(source: ConfigSource): Config {
     'HUB_PUBLIC_URL',
   )
   const auditRetentionMs = parseDuration(source.AUDIT_RETENTION || '2160h')
+  const uiClientId = required(source.HUB_UI_CLIENT_ID, 'HUB_UI_CLIENT_ID')
   return {
     publicUrl,
     apiUrl: `${publicUrl}/api`,
-    uiClientId: required(source.HUB_UI_CLIENT_ID, 'HUB_UI_CLIENT_ID'),
+    uiClientId,
     oidcIssuer: absoluteUrl(
       required(source.OIDC_ISSUER, 'OIDC_ISSUER'),
       'OIDC_ISSUER',
     ),
-    oidcAudience: required(
-      source.KUBERNETES_OIDC_AUDIENCE,
-      'KUBERNETES_OIDC_AUDIENCE',
-    ),
+    oidcAudience: source.KUBERNETES_OIDC_AUDIENCE?.trim() || uiClientId,
     oidcGroupsClaim: source.OIDC_GROUPS_CLAIM?.trim() || 'groups',
     catalogAdminGroups: nonEmptySet(
       source.CATALOG_ADMIN_GROUPS,
@@ -75,6 +75,9 @@ export function loadConfig(source: ConfigSource): Config {
       source.TOKEN_EXCHANGE_CLIENT_SECRET,
       'TOKEN_EXCHANGE_CLIENT_SECRET',
     ),
+    clusterEndpointAllowlist: endpointAllowlist(
+      source.CLUSTER_ENDPOINT_ALLOWLIST,
+    ),
     auditRetentionMs,
     inventory: {
       enabled: source.INVENTORY_ENABLED?.trim() === 'true',
@@ -83,6 +86,14 @@ export function loadConfig(source: ConfigSource): Config {
       kubeconfigFile: source.INVENTORY_KUBECONFIG_FILE?.trim() || '',
     },
   }
+}
+
+export function clusterEndpointAllowed(
+  config: Config,
+  endpoint: string,
+): boolean {
+  if (config.clusterEndpointAllowlist.size === 0) return true
+  return config.clusterEndpointAllowlist.has(new URL(endpoint).origin)
 }
 
 function required(value: string | undefined, name: string): string {
@@ -126,6 +137,26 @@ function nonEmptySet(
   const items = commaList(value || '')
   if (items.length === 0) throw new Error(`${name} is required`)
   return new Set(items)
+}
+
+function endpointAllowlist(value: string | undefined): ReadonlySet<string> {
+  const origins = commaList(value || '').map((item) => {
+    const parsed = new URL(item)
+    if (
+      parsed.protocol !== 'https:' ||
+      parsed.username ||
+      parsed.password ||
+      parsed.pathname !== '/' ||
+      parsed.search ||
+      parsed.hash
+    ) {
+      throw new Error(
+        'CLUSTER_ENDPOINT_ALLOWLIST entries must be HTTPS origins without credentials, path, query, or fragment',
+      )
+    }
+    return parsed.origin
+  })
+  return new Set(origins)
 }
 
 function parseDuration(value: string): number {

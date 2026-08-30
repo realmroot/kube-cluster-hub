@@ -11,7 +11,7 @@ Thank you for helping improve Kube Cluster Hub. The project deliberately keeps a
 
 ## Development
 
-Requirements are Node.js 24+, pnpm 10+, Go 1.26+, and optionally Docker and kind.
+Requirements are Node.js 26+, pnpm 11+, and optionally Docker and kind.
 
 ```sh
 cp .env.example .env

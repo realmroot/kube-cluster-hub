@@ -37,7 +37,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec biome check .
       - run: pnpm typecheck
+      - run: pnpm check:worker-types
       - run: pnpm test:coverage
       - run: pnpm test:worker
       - run: pnpm build
       - run: pnpm build:node
+      - run: pnpm check:deploy

@@ -20,5 +20,6 @@ export interface AppDependencies {
   agents: Pick<AgentVerifier, 'verify'>
   agentTokens: Pick<AgentTokenExchanger, 'exchange'>
   proxy: ProxyDependencies
+  isReady?(): boolean
   inventory?: Pick<InventoryPublisher, 'publish' | 'remove' | 'reconcile'>
 }

@@ -3,7 +3,7 @@ WORKDIR /src
 RUN npm install --global pnpm@11.24.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile --ignore-scripts
-COPY tsconfig.json biome.json wrangler.jsonc vite.config.ts index.html ./
+COPY tsconfig.json biome.json wrangler.toml vite.config.ts index.html ./
 COPY control-plane ./control-plane
 COPY data-plane ./data-plane
 COPY web ./web

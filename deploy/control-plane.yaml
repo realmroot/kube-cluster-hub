@@ -50,7 +50,6 @@ data:
   HUB_PUBLIC_URL: https://clusters.example.com
   HUB_UI_CLIENT_ID: kubernetes-client
   OIDC_ISSUER: https://identity.example.com
-  KUBERNETES_OIDC_AUDIENCE: kubernetes-client
   OIDC_GROUPS_CLAIM: groups
   CATALOG_ADMIN_GROUPS: platform-admins
   RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS: authorized-toolbox-client
@@ -87,8 +86,8 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: hub
-          image: kube-cluster-hub:dev
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/realmroot/kube-cluster-hub:latest
+          imagePullPolicy: Always
           envFrom:
             - configMapRef:
                 name: kube-cluster-hub

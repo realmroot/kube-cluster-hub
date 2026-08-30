@@ -11,7 +11,6 @@ import {
   type UserPrincipal,
   ValidationError,
 } from './domain'
-import { InventoryPublicationError } from './inventory'
 import { TokenExchangeError } from './token-exchange'
 
 export type HubContext = Context<{ Variables: Variables }>
@@ -23,11 +22,22 @@ export function installHttpBoundary(
 ): void {
   app.use('*', async (context, next) => {
     const requestId = crypto.randomUUID()
+    const started = Date.now()
     context.set('requestId', requestId)
     try {
       await next()
     } finally {
       context.header('Request-Id', requestId)
+      console.info(
+        JSON.stringify({
+          message: 'request.completed',
+          requestId,
+          method: context.req.method,
+          path: context.req.path,
+          status: context.res.status,
+          durationMillis: Date.now() - started,
+        }),
+      )
     }
   })
 
@@ -82,14 +92,6 @@ export function installHttpBoundary(
           : 'Token exchange unavailable',
         error.message,
       )
-    if (error instanceof InventoryPublicationError)
-      return problem(
-        context,
-        503,
-        'inventory-publication-pending',
-        'Inventory publication pending',
-        error.message,
-      )
     console.error(
       JSON.stringify({
         message: 'request.unhandled_error',
@@ -106,6 +108,18 @@ export function installHttpBoundary(
       'The request could not be completed',
     )
   })
+
+  app.notFound(hubNotFound)
+}
+
+export function hubNotFound(context: HubContext): Response {
+  return problem(
+    context,
+    404,
+    'not-found',
+    'Not found',
+    'The requested Hub resource does not exist',
+  )
 }
 
 export async function catalogVersion(
@@ -123,6 +137,7 @@ export async function catalogVersion(
   }
   context.header('API-Version', apiVersion)
   context.header('Vary', 'API-Version')
+  context.header('Cache-Control', 'private, no-store')
   await next()
 }
 
@@ -199,7 +214,7 @@ function problem(
       title,
       status,
       detail,
-      requestId: context.get('requestId'),
+      instance: `urn:request:${context.get('requestId')}`,
     },
     status,
     { 'Content-Type': 'application/problem+json' },

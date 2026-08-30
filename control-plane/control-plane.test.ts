@@ -2,7 +2,7 @@ import { once } from 'node:events'
 import { createServer } from 'node:http'
 import { gzipSync } from 'node:zlib'
 import { serve } from '@hono/node-server'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type AppDependencies, createApp } from './app'
 import { type Config, loadConfig } from './config'
 import { apiVersion, kubernetesScope } from './contracts'
@@ -82,7 +82,10 @@ describe('combined control plane and data plane', () => {
     }
   })
 
-  afterEach(() => database.raw.close())
+  afterEach(() => {
+    vi.restoreAllMocks()
+    database.raw.close()
+  })
 
   it('publishes one Hub Resource Server contract', async () => {
     const app = createApp(dependencies)
@@ -128,6 +131,14 @@ describe('combined control plane and data plane', () => {
 
     expect((await app.request('/api/catalog')).status).toBe(404)
     expect((await app.request('/api/agent')).status).toBe(404)
+    const missing = await app.request('/api/not-found')
+    expect(missing.headers.get('Content-Type')).toContain(
+      'application/problem+json',
+    )
+    expect(await missing.json()).toMatchObject({
+      status: 404,
+      type: 'https://kube-cluster-hub.dev/problems/not-found',
+    })
   })
 
   it('uses Bearer for human reads and DPoP for Agent reads on one URI', async () => {
@@ -209,7 +220,7 @@ describe('combined control plane and data plane', () => {
     expect(stale.status).toBe(412)
   })
 
-  it('reports a retryable Inventory publication failure after storing the catalog change', async () => {
+  it('commits catalog changes and marks a failed Inventory projection pending', async () => {
     dependencies.inventory = {
       publish: async () => {
         throw new Error('inventory unavailable')
@@ -226,12 +237,55 @@ describe('combined control plane and data plane', () => {
       },
     )
 
-    expect(response.status).toBe(503)
-    expect(await response.json()).toMatchObject({
-      type: 'https://kube-cluster-hub.dev/problems/inventory-publication-pending',
-      status: 503,
-    })
+    expect(response.status).toBe(201)
+    expect(response.headers.get('Inventory-Status')).toBe('pending')
+    expect(await response.json()).toMatchObject({ id: 'development' })
     expect((await store.getCluster('development')).id).toBe('development')
+  })
+
+  it('audits catalog mutations and enforces an optional endpoint allowlist', async () => {
+    const restricted = loadConfig({
+      HUB_PUBLIC_URL: 'https://gateway.example.com',
+      HUB_UI_CLIENT_ID: 'hub-ui',
+      OIDC_ISSUER: 'https://identity.example.com',
+      KUBERNETES_OIDC_AUDIENCE: 'kubernetes-client',
+      CATALOG_ADMIN_GROUPS: 'platform-admins',
+      RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS: 'authorized-toolbox-client',
+      TOKEN_EXCHANGE_CLIENT_ID: 'hub-token-exchanger',
+      TOKEN_EXCHANGE_CLIENT_SECRET: 'test-secret',
+      CLUSTER_ENDPOINT_ALLOWLIST: 'https://allowed.example.test',
+    })
+    const app = createApp({ ...dependencies, config: restricted })
+    const denied = await app.request('/api/clusters/denied', {
+      method: 'PUT',
+      headers: catalogHeaders({ 'If-None-Match': '*' }),
+      body: JSON.stringify(clusterInput()),
+    })
+    expect(denied.status).toBe(400)
+
+    const created = await app.request('/api/clusters/allowed', {
+      method: 'PUT',
+      headers: catalogHeaders({ 'If-None-Match': '*' }),
+      body: JSON.stringify({
+        ...clusterInput(),
+        apiServerUrl: 'https://allowed.example.test',
+      }),
+    })
+    expect(created.status).toBe(201)
+    expect(await store.listAuditEvents(undefined, 10)).toEqual([
+      expect.objectContaining({
+        principalType: 'user',
+        clusterId: 'allowed',
+        method: 'PUT',
+        status: 201,
+      }),
+      expect.objectContaining({
+        principalType: 'user',
+        clusterId: 'denied',
+        method: 'PUT',
+        status: 400,
+      }),
+    ])
   })
 
   it('forwards a user token directly to the Kubernetes API', async () => {
@@ -256,6 +310,28 @@ describe('combined control plane and data plane', () => {
       principalType: 'user',
       status: 200,
     })
+  })
+
+  it('does not replace an upstream result when audit persistence fails', async () => {
+    await store.createCluster(
+      'development',
+      normalizeClusterInput(clusterInput()),
+    )
+    store.appendAudit = async () => {
+      throw new Error('audit database unavailable')
+    }
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const response = await createApp(dependencies).request(
+      '/clusters/development/kubernetes/api/v1/namespaces',
+      { headers: { Authorization: 'Bearer user-id-token' } },
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe('{"type":"ADDED"}\n')
+    expect(logged).toHaveBeenCalledWith(
+      expect.stringContaining('access.audit.error'),
+    )
   })
 
   it('exchanges Agent authority before forwarding to Kubernetes', async () => {

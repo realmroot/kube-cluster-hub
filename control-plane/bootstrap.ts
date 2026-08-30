@@ -31,6 +31,7 @@ export async function bootstrap(
   fetcher = fetch,
   preparedIdentity?: IdentityRuntime,
   inventoryClient?: InventoryKubernetesClient,
+  isReady: () => boolean = () => true,
 ): Promise<Runtime> {
   const config = loadConfig(source)
   const store = database.createStore?.() ?? new Store(requiredOrm(database))
@@ -66,6 +67,7 @@ export async function bootstrap(
       fetcher,
     ),
     proxy,
+    isReady,
     ...(inventoryClient
       ? { inventory: new InventoryPublisher(config, store, inventoryClient) }
       : {}),

@@ -1,0 +1,30 @@
+name = "kube-cluster-hub"
+main = "control-plane/entry-worker.ts"
+workers_dev = true
+preview_urls = false
+compatibility_date = "2026-08-29"
+compatibility_flags = ["nodejs_compat"]
+keep_vars = true
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.05
+
+[assets]
+binding = "ASSETS"
+not_found_handling = "none"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "kube-cluster-hub"
+migrations_dir = "migrations"
+
+[triggers]
+crons = ["*/5 * * * *"]

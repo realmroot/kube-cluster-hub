@@ -36,7 +36,7 @@ Prometheus URL discovery remains catalog metadata for dashboard metrics. Helm, m
 These are deployment/integration configuration, not missing Hub modules:
 
 1. Realmroot must authorize the Hub token-exchange Application to exchange Hub Resource Server access tokens for Kubernetes-audience ID tokens.
-2. Every kube-apiserver exposed to Agents must trust the Realmroot issuer, accept `KUBERNETES_OIDC_AUDIENCE`, and map identity/group claims consistently.
+2. Every kube-apiserver exposed to Agents must trust the Realmroot issuer, accept the configured Kubernetes audience (by default `HUB_UI_CLIENT_ID`), and map identity/group claims consistently.
 3. Operators must supply network reachability from the Hub runtime to each API server that preserves streaming HTTP and WebSocket upgrades.
 4. Dashboards may discover the Hub catalog through the standard Cluster Inventory projection and use the human proxy with the Realmroot Kubernetes ID token.
 5. Production Node deployments must provide shared PostgreSQL; Worker deployments must use migrated D1.

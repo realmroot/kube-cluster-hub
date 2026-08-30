@@ -12,6 +12,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary'],
+      thresholds: {
+        statements: 55,
+        branches: 50,
+        functions: 50,
+        lines: 55,
+      },
       include: ['control-plane/**/*.ts', 'web/**/*.{ts,tsx}'],
       exclude: ['**/*.test.{ts,tsx}', 'control-plane/entry-*.ts'],
     },

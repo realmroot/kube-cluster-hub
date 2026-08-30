@@ -52,7 +52,7 @@ The Hub does not maintain a second Kubernetes authorization decision.
 1. Realmroot Toolbox discovers RFC 9728 metadata and the Hub OpenAPI document at the same `/api` Resource Server used by the administration UI.
 2. Realmroot issues a DPoP-bound access token for the Agent/controller/client and approved scopes.
 3. The token is audience-bound to the Hub Resource Server. The Hub validates that audience, DPoP binding, replay, actor/controller identity, client allow-list, and the route scope.
-4. The same signed access token is forwarded to kube-apiserver. Kubernetes independently validates an audience configured for that cluster and authorizes its standard identity/group claims through RBAC. The Hub never treats its own audience check as proof that Kubernetes will accept the token.
+4. The Hub exchanges the verified access token through Realmroot RFC 8693 for a Kubernetes-audience ID token and verifies the exchange result. Only that ID token is forwarded to kube-apiserver.
 5. The Hub records controller, Agent actor, client, token ID, scope, cluster, route, status, and duration.
 
 Hub scopes are a resource-server boundary, not a replacement for Kubernetes RBAC. Human Bearer and Agent DPoP tokens share the same exact Hub audience, while route-level authentication still rejects an Agent Bearer fallback. A Kubernetes request must pass both the Hub and Kubernetes layers.

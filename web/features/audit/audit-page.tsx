@@ -74,6 +74,11 @@ export function AuditPage({ api }: { api: HubApi }) {
                     </span>
                     <small>{row.principalType}</small>
                   </td>
+                  <td>{row.clusterId || 'Catalog'}</td>
+                  <td>
+                    <code>{row.method}</code>{' '}
+                    <span className="truncate">{row.path}</span>
+                  </td>
                   <td>
                     {row.principalType === 'agent' ? (
                       <>
@@ -87,11 +92,6 @@ export function AuditPage({ api }: { api: HubApi }) {
                     ) : (
                       '—'
                     )}
-                  </td>
-                  <td>{row.clusterId || 'Catalog'}</td>
-                  <td>
-                    <code>{row.method}</code>{' '}
-                    <span className="truncate">{row.path}</span>
                   </td>
                   <td>
                     <span

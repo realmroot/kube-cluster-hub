@@ -4,6 +4,7 @@ import type { Duplex } from 'node:stream'
 import { sanitizedHeaders } from '../data-plane/proxy'
 import { AuthenticationError } from './auth'
 import type { Runtime } from './bootstrap'
+import { clusterEndpointAllowed } from './config'
 import { kubernetesScope } from './contracts'
 import {
   type AgentPrincipal,
@@ -25,10 +26,57 @@ interface PreparedUpgrade {
 export function attachNodeUpgradeHandler(
   server: import('node:http').Server,
   runtime: Runtime,
-): void {
-  server.on('upgrade', (request, socket, head) => {
-    void handleUpgrade(request, socket, head, runtime)
-  })
+): NodeUpgradeLifecycle {
+  const sockets = new Set<Duplex>()
+  let closing = false
+  const track = (socket: Duplex) => {
+    sockets.add(socket)
+    socket.once('close', () => sockets.delete(socket))
+  }
+  const upgrade = (request: IncomingMessage, socket: Duplex, head: Buffer) => {
+    if (closing) {
+      writeProblem(socket, 503, 'Service is shutting down')
+      return
+    }
+    track(socket)
+    void handleUpgrade(request, socket, head, runtime, track).catch((error) => {
+      console.error(
+        JSON.stringify({
+          message: 'upgrade.handler.error',
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      )
+      socket.destroy()
+    })
+  }
+  server.on('upgrade', upgrade)
+  return {
+    async close(deadlineMillis = 5_000): Promise<void> {
+      closing = true
+      server.off('upgrade', upgrade)
+      const active = [...sockets]
+      for (const socket of active) socket.end()
+      let timeout: NodeJS.Timeout | undefined
+      try {
+        await Promise.race([
+          Promise.all(active.map(waitForClose)).then(() => undefined),
+          new Promise<void>((resolve) => {
+            timeout = setTimeout(() => {
+              for (const socket of sockets) socket.destroy()
+              resolve()
+            }, deadlineMillis)
+            timeout.unref()
+          }),
+        ])
+      } finally {
+        if (timeout) clearTimeout(timeout)
+      }
+    },
+  }
+}
+
+export interface NodeUpgradeLifecycle {
+  close(deadlineMillis?: number): Promise<void>
 }
 
 async function handleUpgrade(
@@ -36,9 +84,26 @@ async function handleUpgrade(
   socket: Duplex,
   head: Buffer,
   runtime: Runtime,
+  trackSocket: (socket: Duplex) => void,
 ): Promise<void> {
   const started = Date.now()
   let prepared: PreparedUpgrade | undefined
+  let audit: Promise<void> | undefined
+  const auditOnce = (status: number) => {
+    audit ??= appendUpgradeAudit(runtime, prepared, request, status, started)
+    return audit
+  }
+  const auditInBackground = (status: number) => {
+    void auditOnce(status).catch((error: unknown) => {
+      console.error(
+        JSON.stringify({
+          message: 'upgrade.audit.error',
+          requestId: prepared?.requestId,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      )
+    })
+  }
   try {
     prepared = await prepareUpgrade(request, runtime)
     await prepareUpstreamAuthorization(prepared, runtime)
@@ -49,31 +114,27 @@ async function handleUpgrade(
       method: request.method,
       headers: Object.fromEntries(prepared.headers.entries()),
     })
+    upstream.once('socket', trackSocket)
     upstream.once('upgrade', (response, upstreamSocket, upstreamHead) => {
+      trackSocket(upstreamSocket)
       writeResponseHead(socket, response, prepared?.requestId)
       if (head.length) upstreamSocket.write(head)
       if (upstreamHead.length) socket.write(upstreamHead)
       socket.pipe(upstreamSocket).pipe(socket)
       upstreamSocket.once('close', () => {
-        void appendUpgradeAudit(runtime, prepared, request, 101, started)
+        auditInBackground(101)
       })
     })
     upstream.once('response', (response) => {
       writeResponseHead(socket, response, prepared?.requestId)
       response.pipe(socket)
       response.once('end', () => {
-        void appendUpgradeAudit(
-          runtime,
-          prepared,
-          request,
-          response.statusCode ?? 502,
-          started,
-        )
+        auditInBackground(response.statusCode ?? 502)
       })
     })
     upstream.once('error', (error) => {
       writeProblem(socket, 502, 'Upstream unavailable', prepared?.requestId)
-      void appendUpgradeAudit(runtime, prepared, request, 502, started)
+      auditInBackground(502)
       console.error(
         JSON.stringify({
           message: 'upgrade.upstream.error',
@@ -90,9 +151,13 @@ async function handleUpgrade(
       error instanceof Error ? error.message : 'Upgrade failed',
       prepared?.requestId,
     )
-    if (prepared)
-      await appendUpgradeAudit(runtime, prepared, request, status, started)
+    if (prepared) await auditOnce(status)
   }
+}
+
+function waitForClose(socket: Duplex): Promise<void> {
+  if (socket.destroyed) return Promise.resolve()
+  return new Promise((resolve) => socket.once('close', resolve))
 }
 
 async function prepareUpgrade(
@@ -102,7 +167,9 @@ async function prepareUpgrade(
   const method = request.method || 'GET'
   const url = new URL(request.url || '/', runtime.config.publicUrl)
   const requestId = crypto.randomUUID()
-  const headers = sanitizedHeaders(headersFromIncoming(request))
+  const headers = sanitizedHeaders(headersFromIncoming(request), {
+    upgrade: true,
+  })
   const agentMatch = /^\/api\/clusters\/([^/]+)\/kubernetes(\/.*)?$/.exec(
     url.pathname,
   )
@@ -135,6 +202,11 @@ async function prepareUpgrade(
   const cluster = await runtime.store.getCluster(clusterId)
   if (!cluster.enabled)
     throw new UpgradeRequestError(503, 'cluster is disabled')
+  if (!clusterEndpointAllowed(runtime.config, cluster.apiServerUrl))
+    throw new UpgradeRequestError(
+      503,
+      'cluster endpoint is not allowed by deployment policy',
+    )
   headers.set('Request-Id', requestId)
   return {
     target: `${cluster.apiServerUrl}${uri}`,

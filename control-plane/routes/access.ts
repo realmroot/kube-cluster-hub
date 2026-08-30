@@ -4,6 +4,7 @@ import {
   proxyUserRequest,
 } from '../../data-plane/proxy'
 import type { AppDependencies, HubApp } from '../app-dependencies'
+import { clusterEndpointAllowed } from '../config'
 import { kubernetesScope } from '../contracts'
 import type { AgentPrincipal, UserPrincipal } from '../domain'
 import {
@@ -46,7 +47,7 @@ async function userProxy(
   const clusterId = requiredClusterId(context)
   let status = 502
   try {
-    const cluster = await enabledCluster(dependencies.store, clusterId)
+    const cluster = await enabledCluster(dependencies, clusterId)
     const response = await proxyUserRequest(
       context.req.raw,
       cluster,
@@ -84,7 +85,7 @@ async function agentProxy(
       agent,
       kubernetesScope(context.req.method, new URL(context.req.url).pathname),
     )
-    const cluster = await enabledCluster(dependencies.store, clusterId)
+    const cluster = await enabledCluster(dependencies, clusterId)
     exchangeStatus = 'failed'
     exchanged = await dependencies.agentTokens.exchange(agent)
     exchangeStatus = 'succeeded'
@@ -125,12 +126,32 @@ async function appendAccessAudit(
   event: Parameters<HubStore['appendAudit']>[0],
   status: number,
 ): Promise<void> {
-  const write = store.appendAudit(event)
+  const write = recordAudit(context, store, event)
   if (status === 101) {
     context.executionCtx.waitUntil(write)
     return
   }
   await write
+}
+
+async function recordAudit(
+  context: HubContext,
+  store: HubStore,
+  event: Parameters<HubStore['appendAudit']>[0],
+): Promise<void> {
+  try {
+    await store.appendAudit(event)
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        message: 'access.audit.error',
+        requestId: context.get('requestId'),
+        principalType: event.principalType,
+        clusterId: event.clusterId,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    )
+  }
 }
 
 export async function verifyAgent(
@@ -147,13 +168,18 @@ export async function verifyAgent(
   )
 }
 
-async function enabledCluster(store: HubStore, id: string) {
-  const cluster = await store.getCluster(id)
+async function enabledCluster(dependencies: AppDependencies, id: string) {
+  const cluster = await dependencies.store.getCluster(id)
   if (!cluster.enabled) throw new ProxyError('cluster is disabled', 503)
+  if (!clusterEndpointAllowed(dependencies.config, cluster.apiServerUrl))
+    throw new ProxyError(
+      'cluster endpoint is not allowed by deployment policy',
+      503,
+    )
   return cluster
 }
 
-function auditForUser(
+export function auditForUser(
   context: HubContext,
   user: UserPrincipal,
   clusterId: string,

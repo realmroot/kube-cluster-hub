@@ -70,6 +70,7 @@ async function proxyRequest(
     headers,
     ...(body === undefined ? {} : { body }),
     redirect: 'manual',
+    signal: request.signal,
   }
   if (body !== undefined) init.duplex = 'half'
 
@@ -91,7 +92,7 @@ async function proxyRequest(
       )
     }
     if (response.status === 101) return response
-    const responseHeaders = new Headers(response.headers)
+    const responseHeaders = sanitizedResponseHeaders(response.headers)
     responseHeaders.set('Cache-Control', 'no-store, no-transform')
     const body = response.body?.pipeThrough(new TransformStream()) || null
     return new Response(body, {
@@ -135,8 +136,12 @@ function kubernetesUri(
   return `${decoded}${url.search}`
 }
 
-export function sanitizedHeaders(input: Headers): Headers {
+export function sanitizedHeaders(
+  input: Headers,
+  options: { upgrade?: boolean } = {},
+): Headers {
   const headers = new Headers(input)
+  const connectionTokens = connectionHeaderTokens(headers)
   for (const name of [...headers.keys()]) {
     const lower = name.toLowerCase()
     if (
@@ -145,6 +150,8 @@ export function sanitizedHeaders(input: Headers): Headers {
       lower === 'dpop' ||
       lower === 'authorization' ||
       lower === 'proxy-authorization' ||
+      (!options.upgrade &&
+        (hopByHopHeaders.has(lower) || connectionTokens.has(lower))) ||
       lower === 'x-cluster-authorization' ||
       lower === 'impersonate-user' ||
       lower === 'impersonate-group' ||
@@ -153,4 +160,36 @@ export function sanitizedHeaders(input: Headers): Headers {
       headers.delete(name)
   }
   return headers
+}
+
+function sanitizedResponseHeaders(input: Headers): Headers {
+  const headers = new Headers(input)
+  const connectionTokens = connectionHeaderTokens(headers)
+  for (const name of [...headers.keys()]) {
+    const lower = name.toLowerCase()
+    if (hopByHopHeaders.has(lower) || connectionTokens.has(lower))
+      headers.delete(name)
+  }
+  return headers
+}
+
+const hopByHopHeaders = new Set([
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'proxy-connection',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+])
+
+function connectionHeaderTokens(headers: Headers): ReadonlySet<string> {
+  return new Set(
+    (headers.get('Connection') || '')
+      .split(',')
+      .map((token) => token.trim().toLowerCase())
+      .filter(Boolean),
+  )
 }
