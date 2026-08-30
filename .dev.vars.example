@@ -1,9 +1,15 @@
-# Required after the Worker URL and Realmroot integrations are known.
+# Final public Worker origin. OAuth redirects and the Resource Server URL are
+# derived from it.
 HUB_PUBLIC_URL=https://clusters.example.com
-HUB_UI_CLIENT_ID=your-public-spa-client-id
+
+# Realmroot OIDC provider and public PKCE client. Kubernetes accepts the same
+# client ID as its OIDC audience.
 OIDC_ISSUER=https://id.realmroot.dev/api/auth
-TOKEN_EXCHANGE_CLIENT_ID=your-machine-client-id
-TOKEN_EXCHANGE_CLIENT_SECRET=replace-me
+OIDC_CLIENT_ID=your-public-spa-client-id
+
+# Confidential Realmroot Application used for RFC 8693 token exchange.
+HUB_CLIENT_ID=your-machine-client-id
+HUB_CLIENT_SECRET=replace-me
 
 # Optional Cluster Inventory publication.
 # INVENTORY_ENABLED=false

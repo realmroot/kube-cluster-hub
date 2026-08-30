@@ -27,7 +27,7 @@ Apply rate limits and request-size limits at the public edge or ingress. Limits 
 
 ## Secret rotation
 
-Rotate the token-exchange machine Application secret in Realmroot, update `TOKEN_EXCHANGE_CLIENT_SECRET` in the deployment secret store, roll/redeploy all instances, verify Agent access, then revoke the old secret. A browser Application secret must never exist. Changing `HUB_PUBLIC_URL`, the Resource Server URL, or the Kubernetes audience is a coordinated identity migration rather than an ordinary secret rotation.
+Rotate the Hub machine Application secret in Realmroot, update it in the deployment secret store, roll/redeploy all instances, verify Agent access, then revoke the old secret. A browser Application secret must never exist. Changing the public Hub origin, Resource Server URL, or Kubernetes audience is a coordinated identity migration rather than an ordinary secret rotation.
 
 ## Upgrades
 

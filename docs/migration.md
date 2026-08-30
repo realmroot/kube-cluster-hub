@@ -16,6 +16,6 @@ Before upgrade, back up D1 or SQLite and export the cluster catalog. After upgra
 5. test reads and mutations as a real user and Agent;
 6. remove Connector Deployments, ServiceAccounts, status secrets, dispatch keys, and Connector-specific RBAC from managed clusters.
 
-For replicated Node/Docker production, provision PostgreSQL and set `HUB_DATABASE_URL`. SQLite-to-PostgreSQL data transfer is not automatic: export catalog records through the API and import them with conditional PUT requests. Audit-history transfer requires an explicit database migration because audit IDs are append-only operational records.
+For replicated Node/Docker production, provision PostgreSQL and configure its URL as shown in the environment example. SQLite-to-PostgreSQL data transfer is not automatic: export catalog records through the API and import them with conditional PUT requests. Audit-history transfer requires an explicit database migration because audit IDs are append-only operational records.
 
 Rollback after applying migration 0003 requires a database restore; the removed trust protocol cannot be reconstructed from the new catalog.

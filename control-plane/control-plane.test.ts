@@ -26,10 +26,10 @@ describe('combined control plane and data plane', () => {
     forwarded = []
     config = loadConfig({
       HUB_PUBLIC_URL: 'https://gateway.example.com',
-      HUB_UI_CLIENT_ID: 'kubernetes-client',
+      OIDC_CLIENT_ID: 'kubernetes-client',
       OIDC_ISSUER: 'https://identity.example.com',
-      TOKEN_EXCHANGE_CLIENT_ID: 'hub-token-exchanger',
-      TOKEN_EXCHANGE_CLIENT_SECRET: 'test-secret',
+      HUB_CLIENT_ID: 'hub-machine-client',
+      HUB_CLIENT_SECRET: 'test-secret',
     })
     const user: UserPrincipal = {
       type: 'user',
@@ -67,7 +67,7 @@ describe('combined control plane and data plane', () => {
       agentTokens: {
         exchange: async () => ({
           token: 'kubernetes-id-token',
-          targetAudience: config.uiClientId,
+          targetAudience: config.oidcClientId,
           groups: ['platform-admins'],
         }),
       },

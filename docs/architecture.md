@@ -60,7 +60,7 @@ Hub scopes are a resource-server boundary, not a replacement for Kubernetes RBAC
 ## Scaling and state
 
 - Worker: Cloudflare scales isolates; D1 stores shared catalog, replay, and audit state.
-- Node/Docker: replicas are stateless when `HUB_DATABASE_URL` points to PostgreSQL. Any replica can handle any request or WebSocket.
+- Node/Docker: PostgreSQL-backed replicas are stateless. Any replica can handle any request or WebSocket.
 - The fixed local SQLite database is deliberately a development mode and must not be used by multiple replicas.
 - No in-memory informer or per-user/per-cluster cache is required. Memory therefore does not grow with the user × cluster product.
 

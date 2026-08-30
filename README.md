@@ -31,7 +31,7 @@ Cloudflare Workers is the shortest production path. The Deploy Button provisions
 
 Node/Docker uses SQLite for single-process development or PostgreSQL for horizontally scaled production replicas.
 
-Read [Deployment](docs/deployment.md) for the Realmroot registrations, five required settings, Kubernetes OIDC/RBAC setup, Worker deployment, and Node/Docker deployment.
+Read [Deployment](docs/deployment.md) for the Realmroot registrations, Kubernetes OIDC/RBAC setup, Worker deployment, and Node/Docker deployment. The annotated example files are the configuration reference.
 
 ## Dashboard integrations
 

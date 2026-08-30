@@ -210,7 +210,8 @@ async function prepareUpgrade(
     requestId,
     exchangeStatus:
       principal.type === 'agent' ? 'not_attempted' : 'not_applicable',
-    targetAudience: principal.type === 'agent' ? runtime.config.uiClientId : '',
+    targetAudience:
+      principal.type === 'agent' ? runtime.config.oidcClientId : '',
   }
 }
 

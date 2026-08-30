@@ -112,7 +112,7 @@ async function agentProxy(
         status,
         Date.now() - started,
         exchangeStatus,
-        exchanged?.targetAudience || dependencies.config.uiClientId,
+        exchanged?.targetAudience || dependencies.config.oidcClientId,
       ),
       status,
     )

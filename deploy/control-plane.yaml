@@ -48,9 +48,9 @@ metadata:
   namespace: kube-cluster-hub-system
 data:
   HUB_PUBLIC_URL: https://clusters.example.com
-  HUB_UI_CLIENT_ID: kubernetes-client
+  OIDC_CLIENT_ID: kubernetes-client
   OIDC_ISSUER: https://identity.example.com
-  TOKEN_EXCHANGE_CLIENT_ID: hub-token-exchanger
+  HUB_CLIENT_ID: hub-machine-client
   INVENTORY_ENABLED: "true"
 ---
 apiVersion: apps/v1
@@ -93,11 +93,11 @@ spec:
                 secretKeyRef:
                   name: kube-cluster-hub-secrets
                   key: database-url
-            - name: TOKEN_EXCHANGE_CLIENT_SECRET
+            - name: HUB_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: kube-cluster-hub-secrets
-                  key: token-exchange-client-secret
+                  key: hub-client-secret
           ports:
             - name: http
               containerPort: 8080

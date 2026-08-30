@@ -2,10 +2,10 @@ export const auditRetentionMs = 90 * 24 * 60 * 60 * 1_000
 
 export interface ConfigSource {
   HUB_PUBLIC_URL?: string
-  HUB_UI_CLIENT_ID?: string
+  OIDC_CLIENT_ID?: string
   OIDC_ISSUER?: string
-  TOKEN_EXCHANGE_CLIENT_ID?: string
-  TOKEN_EXCHANGE_CLIENT_SECRET?: string
+  HUB_CLIENT_ID?: string
+  HUB_CLIENT_SECRET?: string
   INVENTORY_ENABLED?: string
   INVENTORY_KUBECONFIG?: string
   INVENTORY_KUBECONFIG_FILE?: string
@@ -14,10 +14,10 @@ export interface ConfigSource {
 export interface Config {
   publicUrl: string
   apiUrl: string
-  uiClientId: string
+  oidcClientId: string
   oidcIssuer: string
-  tokenExchangeClientId: string
-  tokenExchangeClientSecret: string
+  hubClientId: string
+  hubClientSecret: string
   inventory: {
     enabled: boolean
     kubeconfig: string
@@ -33,19 +33,13 @@ export function loadConfig(source: ConfigSource): Config {
   return {
     publicUrl,
     apiUrl: `${publicUrl}/api`,
-    uiClientId: required(source.HUB_UI_CLIENT_ID, 'HUB_UI_CLIENT_ID'),
+    oidcClientId: required(source.OIDC_CLIENT_ID, 'OIDC_CLIENT_ID'),
     oidcIssuer: absoluteUrl(
       required(source.OIDC_ISSUER, 'OIDC_ISSUER'),
       'OIDC_ISSUER',
     ),
-    tokenExchangeClientId: required(
-      source.TOKEN_EXCHANGE_CLIENT_ID,
-      'TOKEN_EXCHANGE_CLIENT_ID',
-    ),
-    tokenExchangeClientSecret: required(
-      source.TOKEN_EXCHANGE_CLIENT_SECRET,
-      'TOKEN_EXCHANGE_CLIENT_SECRET',
-    ),
+    hubClientId: required(source.HUB_CLIENT_ID, 'HUB_CLIENT_ID'),
+    hubClientSecret: required(source.HUB_CLIENT_SECRET, 'HUB_CLIENT_SECRET'),
     inventory: {
       enabled: source.INVENTORY_ENABLED?.trim() === 'true',
       kubeconfig: source.INVENTORY_KUBECONFIG?.trim() || '',

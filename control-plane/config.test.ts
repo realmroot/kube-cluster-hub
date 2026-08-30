@@ -3,10 +3,10 @@ import { loadConfig } from './config'
 
 const required = {
   HUB_PUBLIC_URL: 'https://hub.example.test',
-  HUB_UI_CLIENT_ID: 'shared-kubernetes-client',
+  OIDC_CLIENT_ID: 'shared-kubernetes-client',
   OIDC_ISSUER: 'https://id.example.test',
-  TOKEN_EXCHANGE_CLIENT_ID: 'token-exchange-client',
-  TOKEN_EXCHANGE_CLIENT_SECRET: 'secret',
+  HUB_CLIENT_ID: 'hub-machine-client',
+  HUB_CLIENT_SECRET: 'secret',
 }
 
 describe('configuration', () => {
@@ -16,10 +16,10 @@ describe('configuration', () => {
     expect(config).toMatchObject({
       publicUrl: 'https://hub.example.test',
       apiUrl: 'https://hub.example.test/api',
-      uiClientId: 'shared-kubernetes-client',
+      oidcClientId: 'shared-kubernetes-client',
       oidcIssuer: 'https://id.example.test',
-      tokenExchangeClientId: 'token-exchange-client',
-      tokenExchangeClientSecret: 'secret',
+      hubClientId: 'hub-machine-client',
+      hubClientSecret: 'secret',
       inventory: { enabled: false, kubeconfig: '', kubeconfigFile: '' },
     })
   })

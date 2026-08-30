@@ -2,40 +2,20 @@
 
 Deploy one Kube Cluster Hub for your own Realmroot tenant or team. The Hub stores only a cluster catalog; it never stores credentials for target clusters.
 
-## Required settings
+## Configuration
 
-| Variable | Purpose | Secret |
-| --- | --- | --- |
-| `HUB_PUBLIC_URL` | Final public HTTPS origin of this Hub | no |
-| `HUB_UI_CLIENT_ID` | Realmroot public SPA client ID shared with Kubernetes as its OIDC audience | no |
-| `OIDC_ISSUER` | Realmroot/OIDC issuer | no |
-| `TOKEN_EXCHANGE_CLIENT_ID` | Realmroot machine Application client ID used for RFC 8693 exchange | no |
-| `TOKEN_EXCHANGE_CLIENT_SECRET` | Machine Application secret | **yes** |
-
-These five settings enable the full human and Agent product. Only the machine Application secret is confidential.
-
-## Optional settings
-
-| Variable | Default | When to set it |
-| --- | --- | --- |
-| `INVENTORY_ENABLED` | `false` | Publish catalog entries as Cluster Inventory resources |
-| `INVENTORY_KUBECONFIG` | none | Inline Inventory API kubeconfig |
-| `INVENTORY_KUBECONFIG_FILE` | none | Node-only path to an Inventory API kubeconfig |
-
-Inventory resources are always published in `cluster-inventory`. Audit events are retained for 90 days. Access tokens are accepted only with RS256, and the standard `groups` claim is passed to Kubernetes by Realmroot token exchange. These are protocol and product decisions rather than deployment variables.
-
-Node also accepts `PORT` (default `8080`) and `HUB_DATABASE_URL` for production PostgreSQL. Without `HUB_DATABASE_URL`, it uses the fixed local `kube-cluster-hub.db` SQLite file. `HUB_POSTGRES_TEST_URL` is test-only. There are no legacy `HUB_PORT`, Hub signing-key, Connector-token, or target-cluster credential settings.
+Use the annotated [`.env.example`](../.env.example) for Node/Docker or [`.dev.vars.example`](../.dev.vars.example) for Workers. These files are the canonical configuration reference. Inventory resources are always published in `cluster-inventory`, audit events are retained for 90 days, access tokens use RS256, and Realmroot token exchange supplies the standard `groups` claim.
 
 ## Realmroot setup
 
 Create these registrations in the tenant that owns the Hub:
 
-1. A public SPA Application using Authorization Code + PKCE. Add `${HUB_PUBLIC_URL}/auth/callback` as an exact redirect URI. Use its client ID as `HUB_UI_CLIENT_ID`.
-2. One Resource Server at the exact resource URL `${HUB_PUBLIC_URL}/api`. Configure the catalog, audit, and Kubernetes scopes exposed by the Hub OpenAPI document. Realmroot decides which users and OAuth clients may receive each scope; the Hub does not maintain duplicate group or client allowlists.
+1. A public SPA Application using Authorization Code + PKCE. Add the Hub's `/auth/callback` URL as an exact redirect URI. Kubernetes uses the same client ID as its OIDC audience.
+2. One Resource Server at the Hub's `/api` URL. Configure the catalog, audit, and Kubernetes scopes exposed by the Hub OpenAPI document. Realmroot decides which users and OAuth clients may receive each scope; the Hub does not maintain duplicate group or client allowlists.
 3. One confidential machine Application for the Hub's token-exchange call. Store its client ID and secret in the Hub deployment.
 4. Authorize exchange from the Hub Resource Server to the Kubernetes Application/audience. The exchanged ID token must retain the subject, Agent/controller attribution, and groups required by Kubernetes RBAC.
 
-The SPA has no secret. The Hub derives its sole protected-resource URL from `HUB_PUBLIC_URL`; it does not require another Resource Server URL setting.
+The SPA has no secret. The Hub derives its sole protected-resource URL from its public origin; it does not require another Resource Server URL setting.
 
 ## Cloudflare Workers
 
@@ -54,7 +34,7 @@ pnpm install --frozen-lockfile
 pnpm deploy
 ```
 
-`keep_vars = true` preserves values managed in the Cloudflare dashboard or secret store. Do not add tenant settings or secrets to `wrangler.toml`. Store `TOKEN_EXCHANGE_CLIENT_SECRET` and, when used, `INVENTORY_KUBECONFIG` as Worker secrets.
+Cloudflare preserves values managed in its dashboard or secret store. Do not add tenant settings or secrets to `wrangler.toml`. Store the Hub Application secret and any inline Inventory kubeconfig as Worker secrets.
 
 Workers must be able to reach every catalog `apiServerUrl`. The network path must preserve streaming responses and WebSocket upgrades; validate Kubernetes watch, following logs, exec, attach, and port-forward rather than only ordinary HTTP requests.
 
@@ -62,16 +42,16 @@ Worker Inventory publication supports a bearer-token kubeconfig targeting a publ
 
 ## Node and Docker
 
-Copy `.env.example` to `.env`. SQLite is intended only for a single local process. Set `HUB_DATABASE_URL` to PostgreSQL for production replicas; migrations run before the process starts listening.
+Copy `.env.example` to `.env`. SQLite is intended only for a single local process. Configure PostgreSQL for production replicas; migrations run before the process starts listening.
 
 ```bash
 docker build -t kube-cluster-hub .
 docker run --rm -p 8080:8080 --env-file .env kube-cluster-hub
 ```
 
-Every PostgreSQL-backed replica is stateless and can serve ordinary requests or WebSocket upgrades. Place replicas behind an HTTP load balancer; sticky sessions are not required beyond the lifetime of an accepted WebSocket. The reference Kubernetes manifest starts two replicas and expects `HUB_DATABASE_URL` plus `TOKEN_EXCHANGE_CLIENT_SECRET` in `kube-cluster-hub-secrets`.
+Every PostgreSQL-backed replica is stateless and can serve ordinary requests or WebSocket upgrades. Place replicas behind an HTTP load balancer; sticky sessions are not required beyond the lifetime of an accepted WebSocket. The reference Kubernetes manifest starts two replicas and reads the database URL and Hub Application secret from `kube-cluster-hub-secrets`.
 
-For Inventory publication, Node loads `INVENTORY_KUBECONFIG`, then `INVENTORY_KUBECONFIG_FILE`, then in-cluster ServiceAccount credentials. The reference Role is limited to `ClusterProfile` resources in the fixed `cluster-inventory` namespace.
+For Inventory publication, Node supports an inline kubeconfig, a kubeconfig file, or in-cluster ServiceAccount credentials. The reference Role is limited to `ClusterProfile` resources in the fixed `cluster-inventory` namespace.
 
 ## Kubernetes OIDC and RBAC
 
@@ -84,7 +64,7 @@ The Hub never impersonates a user or decides Kubernetes resource permissions. Ku
 - Probe `/healthz` for process health and `/readyz` for database readiness.
 - Back up D1/PostgreSQL and test restoration.
 - Alert on 5xx responses, upstream latency, database failures, token-exchange failures, and audit-write failures.
-- Keep `HUB_PUBLIC_URL` stable; OAuth callbacks, the Resource Server audience, DPoP canonical URIs, and dashboard configuration depend on it.
+- Keep the public Hub origin stable; OAuth callbacks, the Resource Server audience, DPoP canonical URIs, and dashboard configuration depend on it.
 - Roll Node replicas gradually. Shutdown stops readiness, refuses new upgrades, drains open WebSockets to a deadline, and closes the database.
 
 See [Operations](operations.md) for initial SLOs, alerts, edge rate limiting, backup/restore, secret rotation, and upgrades.

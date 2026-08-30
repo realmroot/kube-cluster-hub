@@ -74,7 +74,7 @@ describe('Node HTTP Upgrade proxy', () => {
       agentTokens: {
         exchange: async () => ({
           token: 'kubernetes-id-token',
-          targetAudience: config.uiClientId,
+          targetAudience: config.oidcClientId,
           groups: [],
         }),
       },
@@ -116,10 +116,10 @@ describe('Node HTTP Upgrade proxy', () => {
 function testConfig(): Config {
   return loadConfig({
     HUB_PUBLIC_URL: 'http://127.0.0.1:8080',
-    HUB_UI_CLIENT_ID: 'kubernetes-client',
+    OIDC_CLIENT_ID: 'kubernetes-client',
     OIDC_ISSUER: 'https://identity.example.test',
-    TOKEN_EXCHANGE_CLIENT_ID: 'hub-token-exchanger',
-    TOKEN_EXCHANGE_CLIENT_SECRET: 'test-secret',
+    HUB_CLIENT_ID: 'hub-machine-client',
+    HUB_CLIENT_SECRET: 'test-secret',
   })
 }
 

@@ -22,7 +22,7 @@ export function createApp(
   app.get('/api/ui-config', (context) =>
     context.json({
       issuer: dependencies.config.oidcIssuer,
-      clientId: dependencies.config.uiClientId,
+      clientId: dependencies.config.oidcClientId,
       resource: dependencies.config.apiUrl,
       scopes: [
         'openid',

@@ -174,10 +174,10 @@ class MemoryInventoryClient implements InventoryKubernetesClient {
 function config(kubeconfig = '') {
   return loadConfig({
     HUB_PUBLIC_URL: 'https://hub.example.test',
-    HUB_UI_CLIENT_ID: 'kubernetes-client',
+    OIDC_CLIENT_ID: 'kubernetes-client',
     OIDC_ISSUER: 'https://identity.example.test',
-    TOKEN_EXCHANGE_CLIENT_ID: 'hub-token-exchanger',
-    TOKEN_EXCHANGE_CLIENT_SECRET: 'test-secret',
+    HUB_CLIENT_ID: 'hub-machine-client',
+    HUB_CLIENT_SECRET: 'test-secret',
     INVENTORY_ENABLED: 'true',
     INVENTORY_KUBECONFIG: kubeconfig,
   })
