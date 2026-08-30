@@ -68,9 +68,9 @@ describe('OIDC and OAuth Agent authentication', () => {
     )
   })
 
-  it('validates a standard OIDC ID token and groups claim', async () => {
+  it('validates a standard OIDC ID token', async () => {
     const discovered = await discoverIssuer(issuer)
-    const verifier = new UserVerifier(discovered, 'kubernetes-client', 'groups')
+    const verifier = new UserVerifier(discovered, 'kubernetes-client')
     const token = await new SignJWT({
       groups: ['platform-admins', 'developers'],
     })
@@ -83,7 +83,6 @@ describe('OIDC and OAuth Agent authentication', () => {
       .sign(signingKey)
     await expect(verifier.verify(`Bearer ${token}`)).resolves.toMatchObject({
       subject: 'user-1',
-      groups: ['platform-admins', 'developers'],
     })
     await expect(verifier.verify('Bearer malformed')).rejects.toBeInstanceOf(
       AuthenticationError,
@@ -94,7 +93,6 @@ describe('OIDC and OAuth Agent authentication', () => {
     const verifier = new UserVerifier(
       await discoverIssuer(issuer),
       'https://gateway.example.com/api',
-      'groups',
       'access',
     )
     const token = await new SignJWT({
@@ -120,7 +118,7 @@ describe('OIDC and OAuth Agent authentication', () => {
     const proofPublicJwk = await exportJWK(proofPair.publicKey)
     const thumbprint = await calculateJwkThumbprint(proofPublicJwk)
     const accessToken = await new SignJWT({
-      client_id: 'authorized-toolbox-client',
+      client_id: 'realmroot-toolbox',
       scope: 'clusters:read kubernetes:read',
       act: { iss: issuer, sub: 'agent-1' },
       cnf: { jkt: thumbprint },
@@ -145,8 +143,6 @@ describe('OIDC and OAuth Agent authentication', () => {
     const verifier = new AgentVerifier(
       await discoverIssuer(issuer),
       resource,
-      new Set(['authorized-toolbox-client']),
-      ['RS256'],
       store,
     )
     await expect(
@@ -154,6 +150,7 @@ describe('OIDC and OAuth Agent authentication', () => {
     ).resolves.toMatchObject({
       controllerSubject: 'controller-1',
       actor: { issuer, subject: 'agent-1' },
+      clientId: 'realmroot-toolbox',
       scopes: ['clusters:read', 'kubernetes:read'],
       token: accessToken,
     })

@@ -5,6 +5,7 @@ import type { HubStore } from './store'
 export const inventoryManagedByLabel =
   'cluster-inventory.realmroot.dev/managed-by'
 export const inventoryManagerName = 'kube-cluster-hub'
+const inventoryNamespace = 'cluster-inventory'
 
 export interface ClusterProfileDocument {
   apiVersion: 'multicluster.x-k8s.io/v1alpha1'
@@ -57,35 +58,25 @@ export class InventoryPublisher {
           desired.add(cluster.id)
           await this.publish(cluster)
         } else {
-          await this.client.deleteClusterProfile(
-            this.config.inventory.namespace,
-            cluster.id,
-          )
+          await this.client.deleteClusterProfile(inventoryNamespace, cluster.id)
         }
       }
       if (clusters.length < 200) break
       after = clusters.at(-1)?.id ?? ''
     }
 
-    const published = await this.client.listManagedClusterProfiles(
-      this.config.inventory.namespace,
-    )
+    const published =
+      await this.client.listManagedClusterProfiles(inventoryNamespace)
     for (const name of published) {
       if (!desired.has(name)) {
-        await this.client.deleteClusterProfile(
-          this.config.inventory.namespace,
-          name,
-        )
+        await this.client.deleteClusterProfile(inventoryNamespace, name)
       }
     }
   }
 
   async publish(cluster: Cluster): Promise<void> {
     if (!cluster.enabled) {
-      await this.client.deleteClusterProfile(
-        this.config.inventory.namespace,
-        cluster.id,
-      )
+      await this.client.deleteClusterProfile(inventoryNamespace, cluster.id)
       return
     }
     const profile = this.profile(cluster)
@@ -94,10 +85,7 @@ export class InventoryPublisher {
   }
 
   async remove(clusterId: string): Promise<void> {
-    await this.client.deleteClusterProfile(
-      this.config.inventory.namespace,
-      clusterId,
-    )
+    await this.client.deleteClusterProfile(inventoryNamespace, clusterId)
   }
 
   private profile(cluster: Cluster): ClusterProfileDocument {
@@ -106,7 +94,7 @@ export class InventoryPublisher {
       kind: 'ClusterProfile',
       metadata: {
         name: cluster.id,
-        namespace: this.config.inventory.namespace,
+        namespace: inventoryNamespace,
         labels: {
           [inventoryManagedByLabel]: inventoryManagerName,
           'x-k8s.io/cluster-manager': inventoryManagerName,

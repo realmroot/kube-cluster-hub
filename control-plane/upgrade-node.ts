@@ -4,7 +4,6 @@ import type { Duplex } from 'node:stream'
 import { sanitizedHeaders } from '../data-plane/proxy'
 import { AuthenticationError } from './auth'
 import type { Runtime } from './bootstrap'
-import { clusterEndpointAllowed } from './config'
 import { kubernetesScope } from './contracts'
 import {
   type AgentPrincipal,
@@ -202,11 +201,6 @@ async function prepareUpgrade(
   const cluster = await runtime.store.getCluster(clusterId)
   if (!cluster.enabled)
     throw new UpgradeRequestError(503, 'cluster is disabled')
-  if (!clusterEndpointAllowed(runtime.config, cluster.apiServerUrl))
-    throw new UpgradeRequestError(
-      503,
-      'cluster endpoint is not allowed by deployment policy',
-    )
   headers.set('Request-Id', requestId)
   return {
     target: `${cluster.apiServerUrl}${uri}`,
@@ -216,8 +210,7 @@ async function prepareUpgrade(
     requestId,
     exchangeStatus:
       principal.type === 'agent' ? 'not_attempted' : 'not_applicable',
-    targetAudience:
-      principal.type === 'agent' ? runtime.config.oidcAudience : '',
+    targetAudience: principal.type === 'agent' ? runtime.config.uiClientId : '',
   }
 }
 

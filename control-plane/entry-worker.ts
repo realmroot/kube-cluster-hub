@@ -1,5 +1,5 @@
 import { bootstrap, type IdentityRuntime, prepareIdentity } from './bootstrap'
-import { type ConfigSource, loadConfig } from './config'
+import { auditRetentionMs, type ConfigSource, loadConfig } from './config'
 import { D1DatabaseAdapter } from './database-d1'
 import { isFrontendNavigation, serveFrontend } from './frontend'
 import { WorkerInventoryKubernetesClient } from './inventory-worker'
@@ -15,7 +15,7 @@ function identityFor(
   ctx: ExecutionContext,
 ): Promise<IdentityRuntime> {
   const config = loadConfig(env)
-  const fingerprint = `${config.oidcIssuer}\u0000${config.oidcAudience}`
+  const fingerprint = `${config.oidcIssuer}\u0000${config.uiClientId}`
   if (!identityCache || identityCache.fingerprint !== fingerprint) {
     const promise = prepareIdentity(config)
     identityCache = { fingerprint, promise }
@@ -84,9 +84,7 @@ export default {
         : undefined,
     )
     await runtime.dependencies.inventory?.reconcile()
-    await runtime.store.pruneAudit(
-      new Date(Date.now() - runtime.config.auditRetentionMs),
-    )
+    await runtime.store.pruneAudit(new Date(Date.now() - auditRetentionMs))
   },
 } satisfies ExportedHandler<WorkerEnv>
 

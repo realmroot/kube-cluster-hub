@@ -3,7 +3,7 @@ import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
 import type { Variables } from './app-dependencies'
 import { bootstrap } from './bootstrap'
-import { loadConfig } from './config'
+import { auditRetentionMs, loadConfig } from './config'
 import type { DatabaseAdapter } from './database'
 import { isFrontendNavigation } from './frontend'
 import { hubNotFound } from './http'
@@ -23,9 +23,7 @@ if (databaseUrl) {
     import('./database-node'),
     import('./migrate-node'),
   ])
-  const sqlite = new NodeDatabaseAdapter(
-    process.env.HUB_DATABASE_DSN || 'kube-cluster-hub.db',
-  )
+  const sqlite = new NodeDatabaseAdapter('kube-cluster-hub.db')
   migrateNodeDatabase(sqlite)
   database = sqlite
   closeDatabase = async () => {
@@ -48,9 +46,7 @@ const runtime = await bootstrap(
   () => ready,
 )
 
-await runtime.store.pruneAudit(
-  new Date(Date.now() - runtime.config.auditRetentionMs),
-)
+await runtime.store.pruneAudit(new Date(Date.now() - auditRetentionMs))
 await runtime.dependencies.inventory?.reconcile()
 
 const port = Number(process.env.PORT || '8080')
@@ -77,7 +73,7 @@ console.log(
 const retention = setInterval(
   () => {
     void runtime.store
-      .pruneAudit(new Date(Date.now() - runtime.config.auditRetentionMs))
+      .pruneAudit(new Date(Date.now() - auditRetentionMs))
       .catch((error: unknown) => {
         console.error(
           JSON.stringify({

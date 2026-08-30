@@ -13,6 +13,7 @@ import { ConflictError } from './domain'
 import type { HubStore } from './store'
 
 const proofLifetimeSeconds = 300
+const accessTokenAlgorithm = 'RS256'
 
 export class AuthenticationError extends Error {
   constructor(
@@ -56,7 +57,6 @@ export class UserVerifier {
   constructor(
     private readonly issuer: IssuerKeys,
     private readonly audience: string,
-    private readonly groupsClaim: string,
     private readonly tokenKind: 'id' | 'access' = 'id',
   ) {}
 
@@ -94,21 +94,9 @@ export class UserVerifier {
           'invalid_token',
           'token subject is missing',
         )
-      const rawGroups = payload[this.groupsClaim]
-      if (
-        rawGroups !== undefined &&
-        (!Array.isArray(rawGroups) ||
-          rawGroups.some((group) => typeof group !== 'string'))
-      ) {
-        throw new AuthenticationError(
-          'invalid_token',
-          'token groups claim is invalid',
-        )
-      }
       return {
         type: 'user',
         subject: payload.sub,
-        groups: (rawGroups as string[] | undefined) ?? [],
         scopes:
           typeof payload.scope === 'string'
             ? payload.scope.split(/\s+/).filter(Boolean)
@@ -142,8 +130,6 @@ export class AgentVerifier {
   constructor(
     private readonly issuer: IssuerKeys,
     private readonly resource: string,
-    private readonly authorizedClients: ReadonlySet<string>,
-    private readonly algorithms: readonly string[],
     private readonly store: HubStore,
   ) {}
 
@@ -157,8 +143,7 @@ export class AgentVerifier {
     const protectedHeader = decodeProtectedHeader(token)
     if (
       protectedHeader.typ?.toLowerCase() !== 'at+jwt' ||
-      !protectedHeader.alg ||
-      !this.algorithms.includes(protectedHeader.alg)
+      protectedHeader.alg !== accessTokenAlgorithm
     ) {
       throw new AuthenticationError(
         'invalid_token',
@@ -171,7 +156,7 @@ export class AgentVerifier {
         await jwtVerify(token, this.issuer.keys, {
           issuer: this.issuer.issuer,
           audience: this.resource,
-          algorithms: [...this.algorithms],
+          algorithms: [accessTokenAlgorithm],
         })
       ).payload as AgentClaims
     } catch {
@@ -180,12 +165,7 @@ export class AgentVerifier {
         'access token verification failed',
       )
     }
-    if (
-      !payload.sub ||
-      !payload.jti ||
-      !payload.client_id ||
-      !this.authorizedClients.has(payload.client_id)
-    ) {
+    if (!payload.sub || !payload.jti || !payload.client_id) {
       throw new AuthenticationError(
         'invalid_token',
         'access token identity is invalid',

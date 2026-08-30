@@ -1,19 +1,13 @@
 import type { AppDependencies, HubApp } from '../app-dependencies'
-import { clusterEndpointAllowed } from '../config'
 import { scopes } from '../contracts'
 import type { AgentPrincipal, Cluster, UserPrincipal } from '../domain'
-import {
-  normalizeClusterInput,
-  ValidationError,
-  validateClusterId,
-} from '../domain'
+import { normalizeClusterInput, validateClusterId } from '../domain'
 import {
   auditStatus,
   boundedJson,
   catalogVersion,
   etag,
   parseEtag,
-  requireAdmin,
   requireAgentScope,
   requireUserScope,
 } from '../http'
@@ -61,14 +55,9 @@ export function registerCatalogRoutes(
     let status = 500
     try {
       requireUserScope(user, scopes.clustersWrite)
-      requireAdmin(user, dependencies.config)
       const id = context.req.param('clusterId')
       validateClusterId(id)
       const input = normalizeClusterInput(await boundedJson(context.req.raw))
-      if (!clusterEndpointAllowed(dependencies.config, input.apiServerUrl))
-        throw new ValidationError(
-          'apiServerUrl is not allowed by CLUSTER_ENDPOINT_ALLOWLIST',
-        )
       const ifNoneMatch = context.req.header('If-None-Match')
       const cluster =
         ifNoneMatch === '*'
@@ -109,7 +98,6 @@ export function registerCatalogRoutes(
     let status = 500
     try {
       requireUserScope(user, scopes.clustersWrite)
-      requireAdmin(user, dependencies.config)
       const id = context.req.param('clusterId')
       await dependencies.store.deleteCluster(
         id,
@@ -135,21 +123,13 @@ export function registerCatalogRoutes(
   })
 
   app.get('/api/audit-events', (context) =>
-    readForUserOrAgent(
-      context,
-      dependencies,
-      scopes.auditRead,
-      '',
-      (principal) => {
-        if (principal.type === 'user')
-          requireAdmin(principal, dependencies.config)
-        return auditPage(
-          context,
-          dependencies.store,
-          `${dependencies.config.apiUrl}/audit-events`,
-        )
-      },
-    ),
+    readForUserOrAgent(context, dependencies, scopes.auditRead, '', () => {
+      return auditPage(
+        context,
+        dependencies.store,
+        `${dependencies.config.apiUrl}/audit-events`,
+      )
+    }),
   )
 }
 

@@ -1,18 +1,12 @@
+export const auditRetentionMs = 90 * 24 * 60 * 60 * 1_000
+
 export interface ConfigSource {
   HUB_PUBLIC_URL?: string
   HUB_UI_CLIENT_ID?: string
   OIDC_ISSUER?: string
-  KUBERNETES_OIDC_AUDIENCE?: string
-  OIDC_GROUPS_CLAIM?: string
-  CATALOG_ADMIN_GROUPS?: string
-  RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS?: string
-  RESOURCE_SERVER_JWT_ALGORITHMS?: string
   TOKEN_EXCHANGE_CLIENT_ID?: string
   TOKEN_EXCHANGE_CLIENT_SECRET?: string
-  CLUSTER_ENDPOINT_ALLOWLIST?: string
-  AUDIT_RETENTION?: string
   INVENTORY_ENABLED?: string
-  INVENTORY_NAMESPACE?: string
   INVENTORY_KUBECONFIG?: string
   INVENTORY_KUBECONFIG_FILE?: string
 }
@@ -22,18 +16,10 @@ export interface Config {
   apiUrl: string
   uiClientId: string
   oidcIssuer: string
-  oidcAudience: string
-  oidcGroupsClaim: string
-  catalogAdminGroups: ReadonlySet<string>
-  agentAuthorizedClients: ReadonlySet<string>
-  agentSigningAlgorithms: readonly string[]
   tokenExchangeClientId: string
   tokenExchangeClientSecret: string
-  clusterEndpointAllowlist: ReadonlySet<string>
-  auditRetentionMs: number
   inventory: {
     enabled: boolean
-    namespace: string
     kubeconfig: string
     kubeconfigFile: string
   }
@@ -44,28 +30,13 @@ export function loadConfig(source: ConfigSource): Config {
     required(source.HUB_PUBLIC_URL, 'HUB_PUBLIC_URL'),
     'HUB_PUBLIC_URL',
   )
-  const auditRetentionMs = parseDuration(source.AUDIT_RETENTION || '2160h')
-  const uiClientId = required(source.HUB_UI_CLIENT_ID, 'HUB_UI_CLIENT_ID')
   return {
     publicUrl,
     apiUrl: `${publicUrl}/api`,
-    uiClientId,
+    uiClientId: required(source.HUB_UI_CLIENT_ID, 'HUB_UI_CLIENT_ID'),
     oidcIssuer: absoluteUrl(
       required(source.OIDC_ISSUER, 'OIDC_ISSUER'),
       'OIDC_ISSUER',
-    ),
-    oidcAudience: source.KUBERNETES_OIDC_AUDIENCE?.trim() || uiClientId,
-    oidcGroupsClaim: source.OIDC_GROUPS_CLAIM?.trim() || 'groups',
-    catalogAdminGroups: nonEmptySet(
-      source.CATALOG_ADMIN_GROUPS,
-      'CATALOG_ADMIN_GROUPS',
-    ),
-    agentAuthorizedClients: nonEmptySet(
-      source.RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS,
-      'RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS',
-    ),
-    agentSigningAlgorithms: commaList(
-      source.RESOURCE_SERVER_JWT_ALGORITHMS || 'RS256',
     ),
     tokenExchangeClientId: required(
       source.TOKEN_EXCHANGE_CLIENT_ID,
@@ -75,25 +46,12 @@ export function loadConfig(source: ConfigSource): Config {
       source.TOKEN_EXCHANGE_CLIENT_SECRET,
       'TOKEN_EXCHANGE_CLIENT_SECRET',
     ),
-    clusterEndpointAllowlist: endpointAllowlist(
-      source.CLUSTER_ENDPOINT_ALLOWLIST,
-    ),
-    auditRetentionMs,
     inventory: {
       enabled: source.INVENTORY_ENABLED?.trim() === 'true',
-      namespace: source.INVENTORY_NAMESPACE?.trim() || 'cluster-inventory',
       kubeconfig: source.INVENTORY_KUBECONFIG?.trim() || '',
       kubeconfigFile: source.INVENTORY_KUBECONFIG_FILE?.trim() || '',
     },
   }
-}
-
-export function clusterEndpointAllowed(
-  config: Config,
-  endpoint: string,
-): boolean {
-  if (config.clusterEndpointAllowlist.size === 0) return true
-  return config.clusterEndpointAllowlist.has(new URL(endpoint).origin)
 }
 
 function required(value: string | undefined, name: string): string {
@@ -121,53 +79,4 @@ function absoluteUrl(value: string, name: string): string {
     )
   }
   return value.replace(/\/$/, '')
-}
-
-function commaList(value: string): string[] {
-  return value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean)
-}
-
-function nonEmptySet(
-  value: string | undefined,
-  name: string,
-): ReadonlySet<string> {
-  const items = commaList(value || '')
-  if (items.length === 0) throw new Error(`${name} is required`)
-  return new Set(items)
-}
-
-function endpointAllowlist(value: string | undefined): ReadonlySet<string> {
-  const origins = commaList(value || '').map((item) => {
-    const parsed = new URL(item)
-    if (
-      parsed.protocol !== 'https:' ||
-      parsed.username ||
-      parsed.password ||
-      parsed.pathname !== '/' ||
-      parsed.search ||
-      parsed.hash
-    ) {
-      throw new Error(
-        'CLUSTER_ENDPOINT_ALLOWLIST entries must be HTTPS origins without credentials, path, query, or fragment',
-      )
-    }
-    return parsed.origin
-  })
-  return new Set(origins)
-}
-
-function parseDuration(value: string): number {
-  const match = /^(\d+)(ms|s|m|h)$/.exec(value.trim())
-  if (!match) throw new Error('AUDIT_RETENTION must use ms, s, m, or h')
-  const amount = Number(match[1])
-  const unit = match[2]
-  const multiplier =
-    unit === 'ms' ? 1 : unit === 's' ? 1_000 : unit === 'm' ? 60_000 : 3_600_000
-  const result = amount * multiplier
-  if (!Number.isSafeInteger(result) || result <= 0)
-    throw new Error('AUDIT_RETENTION must be greater than zero')
-  return result
 }

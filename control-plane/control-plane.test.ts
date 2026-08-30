@@ -28,16 +28,12 @@ describe('combined control plane and data plane', () => {
       HUB_PUBLIC_URL: 'https://gateway.example.com',
       HUB_UI_CLIENT_ID: 'kubernetes-client',
       OIDC_ISSUER: 'https://identity.example.com',
-      KUBERNETES_OIDC_AUDIENCE: 'kubernetes-client',
-      CATALOG_ADMIN_GROUPS: 'platform-admins',
-      RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS: 'authorized-toolbox-client',
       TOKEN_EXCHANGE_CLIENT_ID: 'hub-token-exchanger',
       TOKEN_EXCHANGE_CLIENT_SECRET: 'test-secret',
     })
     const user: UserPrincipal = {
       type: 'user',
       subject: 'user-1',
-      groups: ['platform-admins'],
       scopes: ['clusters:read', 'clusters:write', 'audit-events:read'],
       token: 'user-id-token',
     }
@@ -62,14 +58,16 @@ describe('combined control plane and data plane', () => {
       store,
       catalogUsers: {
         verify: async (authorization) =>
-          authorization === 'Bearer viewer' ? { ...user, groups: [] } : user,
+          authorization === 'Bearer viewer'
+            ? { ...user, scopes: ['clusters:read'] }
+            : user,
       },
       kubernetesUsers: { verify: async () => user },
       agents: { verify: async () => agent },
       agentTokens: {
         exchange: async () => ({
           token: 'kubernetes-id-token',
-          targetAudience: config.oidcAudience,
+          targetAudience: config.uiClientId,
           groups: ['platform-admins'],
         }),
       },
@@ -170,7 +168,7 @@ describe('combined control plane and data plane', () => {
     ])
   })
 
-  it('provides conditional catalog CRUD with admin authorization', async () => {
+  it('provides conditional catalog CRUD with scope authorization', async () => {
     const app = createApp(dependencies)
     const created = await app.request('/api/clusters/development', {
       method: 'PUT',
@@ -243,47 +241,19 @@ describe('combined control plane and data plane', () => {
     expect((await store.getCluster('development')).id).toBe('development')
   })
 
-  it('audits catalog mutations and enforces an optional endpoint allowlist', async () => {
-    const restricted = loadConfig({
-      HUB_PUBLIC_URL: 'https://gateway.example.com',
-      HUB_UI_CLIENT_ID: 'hub-ui',
-      OIDC_ISSUER: 'https://identity.example.com',
-      KUBERNETES_OIDC_AUDIENCE: 'kubernetes-client',
-      CATALOG_ADMIN_GROUPS: 'platform-admins',
-      RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS: 'authorized-toolbox-client',
-      TOKEN_EXCHANGE_CLIENT_ID: 'hub-token-exchanger',
-      TOKEN_EXCHANGE_CLIENT_SECRET: 'test-secret',
-      CLUSTER_ENDPOINT_ALLOWLIST: 'https://allowed.example.test',
-    })
-    const app = createApp({ ...dependencies, config: restricted })
-    const denied = await app.request('/api/clusters/denied', {
+  it('audits catalog mutations', async () => {
+    const created = await createApp(dependencies).request('/api/clusters/one', {
       method: 'PUT',
       headers: catalogHeaders({ 'If-None-Match': '*' }),
       body: JSON.stringify(clusterInput()),
-    })
-    expect(denied.status).toBe(400)
-
-    const created = await app.request('/api/clusters/allowed', {
-      method: 'PUT',
-      headers: catalogHeaders({ 'If-None-Match': '*' }),
-      body: JSON.stringify({
-        ...clusterInput(),
-        apiServerUrl: 'https://allowed.example.test',
-      }),
     })
     expect(created.status).toBe(201)
     expect(await store.listAuditEvents(undefined, 10)).toEqual([
       expect.objectContaining({
         principalType: 'user',
-        clusterId: 'allowed',
+        clusterId: 'one',
         method: 'PUT',
         status: 201,
-      }),
-      expect.objectContaining({
-        principalType: 'user',
-        clusterId: 'denied',
-        method: 'PUT',
-        status: 400,
       }),
     ])
   })

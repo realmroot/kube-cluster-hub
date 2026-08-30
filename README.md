@@ -21,9 +21,9 @@ The Hub does not add another Kubernetes permission database, run informers, mana
 
 ## Identity and authorization
 
-Humans use a public Realmroot SPA Application. Catalog access is authorized by the Hub's configured administrator groups; Kubernetes access is authorized by the target cluster's RBAC using the user's OIDC identity and groups.
+Humans use a public Realmroot SPA Application. Realmroot controls catalog and audit access by granting Hub Resource Server scopes; Kubernetes access is authorized independently by the target cluster's RBAC using the user's OIDC identity and groups.
 
-Agents receive a DPoP-bound access token for the Hub Resource Server. The Hub validates it, exchanges it for a Kubernetes-audience ID token, and forwards only the exchanged token. The target kube-apiserver validates the identity again and applies RBAC. By default the SPA and Kubernetes share one public client ID; a separate Kubernetes audience is an optional override.
+Agents receive a DPoP-bound access token for the Hub Resource Server. The Hub validates it, exchanges it for an ID token whose audience is the shared SPA/Kubernetes public client ID, and forwards only the exchanged token. The target kube-apiserver validates the identity again and applies RBAC.
 
 ## Deploy
 
@@ -31,7 +31,7 @@ Cloudflare Workers is the shortest production path. The Deploy Button provisions
 
 Node/Docker uses SQLite for single-process development or PostgreSQL for horizontally scaled production replicas.
 
-Read [Deployment](docs/deployment.md) for the Realmroot registrations, seven required settings, Kubernetes OIDC/RBAC setup, Worker deployment, and Node/Docker deployment.
+Read [Deployment](docs/deployment.md) for the Realmroot registrations, five required settings, Kubernetes OIDC/RBAC setup, Worker deployment, and Node/Docker deployment.
 
 ## Dashboard integrations
 

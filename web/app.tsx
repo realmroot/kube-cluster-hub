@@ -142,8 +142,8 @@ function SignIn({ error, login }: { error: string; login(): Promise<void> }) {
           </span>
           <h2>Sign in to the control plane</h2>
           <p>
-            Your OpenID Provider authenticates you. OAuth scopes and configured
-            administrator groups protect catalog changes.
+            Your OpenID Provider authenticates you. Resource Server scopes
+            protect catalog and audit operations.
           </p>
           {error && (
             <div className="form-error" role="alert">

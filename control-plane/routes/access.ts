@@ -4,7 +4,6 @@ import {
   proxyUserRequest,
 } from '../../data-plane/proxy'
 import type { AppDependencies, HubApp } from '../app-dependencies'
-import { clusterEndpointAllowed } from '../config'
 import { kubernetesScope } from '../contracts'
 import type { AgentPrincipal, UserPrincipal } from '../domain'
 import {
@@ -113,7 +112,7 @@ async function agentProxy(
         status,
         Date.now() - started,
         exchangeStatus,
-        exchanged?.targetAudience || dependencies.config.oidcAudience,
+        exchanged?.targetAudience || dependencies.config.uiClientId,
       ),
       status,
     )
@@ -171,11 +170,6 @@ export async function verifyAgent(
 async function enabledCluster(dependencies: AppDependencies, id: string) {
   const cluster = await dependencies.store.getCluster(id)
   if (!cluster.enabled) throw new ProxyError('cluster is disabled', 503)
-  if (!clusterEndpointAllowed(dependencies.config, cluster.apiServerUrl))
-    throw new ProxyError(
-      'cluster endpoint is not allowed by deployment policy',
-      503,
-    )
   return cluster
 }
 

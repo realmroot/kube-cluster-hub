@@ -12,9 +12,9 @@ Cluster and audit resources have one canonical URI regardless of caller type.
 | --- | --- | --- | --- |
 | `GET /api/clusters` | `clusters:read` | human or Agent | cursor pagination |
 | `GET /api/clusters/{id}` | `clusters:read` | human or Agent | returns `ETag` |
-| `PUT /api/clusters/{id}` | `clusters:write` | human | configured admin group and `If-Match`/`If-None-Match` |
-| `DELETE /api/clusters/{id}` | `clusters:write` | human | configured admin group and `If-Match` |
-| `GET /api/audit-events` | `audit-events:read` | human or Agent | configured admin group for humans |
+| `PUT /api/clusters/{id}` | `clusters:write` | human | `If-Match`/`If-None-Match` |
+| `DELETE /api/clusters/{id}` | `clusters:write` | human | `If-Match` |
+| `GET /api/audit-events` | `audit-events:read` | human or Agent | cursor pagination |
 
 Lists use cursor pagination. Cluster representations use an `ETag` derived from `resourceVersion`. Unknown input fields that represent removed credentials or connection modes are rejected instead of silently ignored. Agent reads are recorded with their controller and actor identity.
 
@@ -29,10 +29,10 @@ The bearer credential must be a Kubernetes-audience Realmroot ID token. The suff
 Path: `/api/clusters/{clusterId}/kubernetes/{kubernetesPath}`. It requires:
 
 - a DPoP-bound Hub access token with the exact `{HUB_PUBLIC_URL}/api` audience;
-- a valid proof for the method and canonical URI, an authorized OAuth client, and a non-replayed proof;
+- a valid proof for the method and canonical URI and a non-replayed proof;
 - `kubernetes:read` for safe reads or `kubernetes:write` for mutations and streaming write subresources.
 
-`exec`, `attach`, and `portforward` require `kubernetes:write` even when the HTTP handshake is `GET`. The verified access token is exchanged through RFC 8693 for a Realmroot ID token whose audience defaults to `HUB_UI_CLIENT_ID`; `KUBERNETES_OIDC_AUDIENCE` overrides it only for a separate Kubernetes client. Neither the source access token nor DPoP proof is forwarded. The Hub verifies issuer, signature, audience, subject, actor chain, authorized party, groups, and expiry on the exchange result before Kubernetes independently applies RBAC.
+`exec`, `attach`, and `portforward` require `kubernetes:write` even when the HTTP handshake is `GET`. The verified access token is exchanged through RFC 8693 for a Realmroot ID token whose audience is `HUB_UI_CLIENT_ID`, shared by the SPA and Kubernetes. Neither the source access token nor DPoP proof is forwarded. The Hub verifies issuer, signature, audience, subject, actor chain, authorized party, groups, and expiry on the exchange result before Kubernetes independently applies RBAC.
 
 ## Header boundary
 

@@ -21,16 +21,10 @@
         "description": "The final public HTTPS origin of this Hub. Create the Realmroot redirect and Resource Server registrations with this exact origin."
       },
       "HUB_UI_CLIENT_ID": {
-        "description": "Realmroot public SPA Application client ID. It is also the default Kubernetes OIDC audience."
+        "description": "Realmroot public SPA Application client ID shared with Kubernetes as its OIDC audience."
       },
       "OIDC_ISSUER": {
         "description": "Realmroot issuer, normally `https://id.realmroot.dev/api/auth`."
-      },
-      "CATALOG_ADMIN_GROUPS": {
-        "description": "Comma-separated Realmroot groups allowed to change the cluster catalog and read audit events."
-      },
-      "RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS": {
-        "description": "Comma-separated Realmroot Toolbox/controller OAuth client IDs allowed to call Agent routes."
       },
       "TOKEN_EXCHANGE_CLIENT_ID": {
         "description": "Realmroot Machine Application client ID authorized for Hub-to-Kubernetes token exchange."

@@ -2,7 +2,6 @@ import type { Context, Next } from 'hono'
 import { ProxyError } from '../data-plane/proxy'
 import type { Variables } from './app-dependencies'
 import { AuthenticationError } from './auth'
-import type { Config } from './config'
 import { apiVersion } from './contracts'
 import {
   type AgentPrincipal,
@@ -139,13 +138,6 @@ export async function catalogVersion(
   context.header('Vary', 'API-Version')
   context.header('Cache-Control', 'private, no-store')
   await next()
-}
-
-export function requireAdmin(user: UserPrincipal, config: Config): void {
-  if (!user.groups.some((group) => config.catalogAdminGroups.has(group)))
-    throw new AuthorizationError(
-      'catalog administrator group membership is required',
-    )
 }
 
 export function requireUserScope(user: UserPrincipal, scope: string): void {

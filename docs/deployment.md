@@ -7,37 +7,31 @@ Deploy one Kube Cluster Hub for your own Realmroot tenant or team. The Hub store
 | Variable | Purpose | Secret |
 | --- | --- | --- |
 | `HUB_PUBLIC_URL` | Final public HTTPS origin of this Hub | no |
-| `HUB_UI_CLIENT_ID` | Realmroot public SPA client ID; also the default Kubernetes OIDC audience | no |
+| `HUB_UI_CLIENT_ID` | Realmroot public SPA client ID shared with Kubernetes as its OIDC audience | no |
 | `OIDC_ISSUER` | Realmroot/OIDC issuer | no |
-| `CATALOG_ADMIN_GROUPS` | Comma-separated groups allowed to change the catalog and read audit events | no |
-| `RESOURCE_SERVER_AUTHORIZED_CLIENT_IDS` | Comma-separated Toolbox/controller OAuth client IDs allowed to call Agent routes | no |
 | `TOKEN_EXCHANGE_CLIENT_ID` | Realmroot machine Application client ID used for RFC 8693 exchange | no |
 | `TOKEN_EXCHANGE_CLIENT_SECRET` | Machine Application secret | **yes** |
 
-These seven settings enable the full human and Agent product. Only the machine Application secret is confidential.
+These five settings enable the full human and Agent product. Only the machine Application secret is confidential.
 
 ## Optional settings
 
 | Variable | Default | When to set it |
 | --- | --- | --- |
-| `KUBERNETES_OIDC_AUDIENCE` | `HUB_UI_CLIENT_ID` | Kubernetes deliberately uses a separate client/audience |
-| `OIDC_GROUPS_CLAIM` | `groups` | The provider uses another standards-compatible groups claim |
-| `RESOURCE_SERVER_JWT_ALGORITHMS` | `RS256` | The authorization server uses another explicitly approved JWT algorithm |
-| `CLUSTER_ENDPOINT_ALLOWLIST` | unrestricted | Restrict catalog endpoints to comma-separated exact HTTPS origins |
-| `AUDIT_RETENTION` | `2160h` | Change the 90-day audit retention |
 | `INVENTORY_ENABLED` | `false` | Publish catalog entries as Cluster Inventory resources |
-| `INVENTORY_NAMESPACE` | `cluster-inventory` | Publish into another inventory namespace |
 | `INVENTORY_KUBECONFIG` | none | Inline Inventory API kubeconfig |
 | `INVENTORY_KUBECONFIG_FILE` | none | Node-only path to an Inventory API kubeconfig |
 
-Node also accepts `PORT` (default `8080`), `HUB_DATABASE_DSN` for local SQLite, and `HUB_DATABASE_URL` for production PostgreSQL. `HUB_POSTGRES_TEST_URL` is test-only. There are no legacy `HUB_PORT`, Hub signing-key, Connector-token, or target-cluster credential settings.
+Inventory resources are always published in `cluster-inventory`. Audit events are retained for 90 days. Access tokens are accepted only with RS256, and the standard `groups` claim is passed to Kubernetes by Realmroot token exchange. These are protocol and product decisions rather than deployment variables.
+
+Node also accepts `PORT` (default `8080`) and `HUB_DATABASE_URL` for production PostgreSQL. Without `HUB_DATABASE_URL`, it uses the fixed local `kube-cluster-hub.db` SQLite file. `HUB_POSTGRES_TEST_URL` is test-only. There are no legacy `HUB_PORT`, Hub signing-key, Connector-token, or target-cluster credential settings.
 
 ## Realmroot setup
 
 Create these registrations in the tenant that owns the Hub:
 
 1. A public SPA Application using Authorization Code + PKCE. Add `${HUB_PUBLIC_URL}/auth/callback` as an exact redirect URI. Use its client ID as `HUB_UI_CLIENT_ID`.
-2. One Resource Server at the exact resource URL `${HUB_PUBLIC_URL}/api`. Configure the catalog, audit, and Kubernetes scopes exposed by the Hub OpenAPI document.
+2. One Resource Server at the exact resource URL `${HUB_PUBLIC_URL}/api`. Configure the catalog, audit, and Kubernetes scopes exposed by the Hub OpenAPI document. Realmroot decides which users and OAuth clients may receive each scope; the Hub does not maintain duplicate group or client allowlists.
 3. One confidential machine Application for the Hub's token-exchange call. Store its client ID and secret in the Hub deployment.
 4. Authorize exchange from the Hub Resource Server to the Kubernetes Application/audience. The exchanged ID token must retain the subject, Agent/controller attribution, and groups required by Kubernetes RBAC.
 
@@ -49,7 +43,7 @@ The Worker contains the UI, control plane, and Kubernetes proxy. D1 provides sha
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/realmroot/kube-cluster-hub)
 
-The button uses the same committed [`wrangler.toml`](../wrangler.toml) as command-line deployment. It provisions or reuses a D1 database named `kube-cluster-hub` through binding `DB`; `database_id` and account-specific values are intentionally absent. `.dev.vars.example` lets Cloudflare request the seven product settings.
+The button uses the same committed [`wrangler.toml`](../wrangler.toml) as command-line deployment. It provisions or reuses a D1 database named `kube-cluster-hub` through binding `DB`; `database_id` and account-specific values are intentionally absent. The repository metadata describes the five product settings Cloudflare requests during deployment.
 
 There is one bootstrap dependency: the final Worker origin is needed when creating the Realmroot registrations. If the origin is not known before the first deploy, let the button provision the Worker, create the Realmroot registrations with that origin, set the variables/secrets in Cloudflare, and redeploy. The first unconfigured deployment is not ready for login or API traffic.
 
@@ -77,7 +71,7 @@ docker run --rm -p 8080:8080 --env-file .env kube-cluster-hub
 
 Every PostgreSQL-backed replica is stateless and can serve ordinary requests or WebSocket upgrades. Place replicas behind an HTTP load balancer; sticky sessions are not required beyond the lifetime of an accepted WebSocket. The reference Kubernetes manifest starts two replicas and expects `HUB_DATABASE_URL` plus `TOKEN_EXCHANGE_CLIENT_SECRET` in `kube-cluster-hub-secrets`.
 
-For Inventory publication, Node loads `INVENTORY_KUBECONFIG`, then `INVENTORY_KUBECONFIG_FILE`, then in-cluster ServiceAccount credentials. The reference Role is limited to `ClusterProfile` resources in the configured namespace.
+For Inventory publication, Node loads `INVENTORY_KUBECONFIG`, then `INVENTORY_KUBECONFIG_FILE`, then in-cluster ServiceAccount credentials. The reference Role is limited to `ClusterProfile` resources in the fixed `cluster-inventory` namespace.
 
 ## Kubernetes OIDC and RBAC
 
