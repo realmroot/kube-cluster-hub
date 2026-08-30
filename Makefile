@@ -1,4 +1,6 @@
-.PHONY: deps run run-node test test-worker test-e2e build build-node build-worker verify image deploy
+.PHONY: deps run run-node test test-worker test-e2e build build-node build-worker verify verify-image image deploy-kind
+
+KIND_CLUSTER ?= kind
 
 -include .env
 export
@@ -33,6 +35,8 @@ build-worker:
 verify:
 	pnpm exec biome check .
 	pnpm lint:dead-code
+	pnpm check:openapi
+	pnpm check:security
 	pnpm check:worker-types
 	pnpm typecheck
 	pnpm test
@@ -43,6 +47,9 @@ verify:
 image:
 	docker build -t kube-cluster-hub:dev .
 
-deploy: image
-	kind load docker-image kube-cluster-hub:dev --name kite-realmroot-demo
+verify-image:
+	pnpm check:image
+
+deploy-kind: image
+	kind load docker-image kube-cluster-hub:dev --name $(KIND_CLUSTER)
 	kubectl apply -f deploy/control-plane.yaml

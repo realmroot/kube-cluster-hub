@@ -4,6 +4,8 @@
     "includes": [
       "control-plane/**/*.{ts,tsx}",
       "data-plane/**/*.ts",
+      "scripts/**/*.mjs",
+      "scripts/**/*.ts",
       "web/**/*.{ts,tsx}",
       "vite.config.ts",
       "vitest.config.ts",

@@ -7,12 +7,12 @@ This record is intentionally evidence-based. A row is marked passed only after t
 | Check | Status |
 | --- | --- |
 | TypeScript 7 strict typecheck | passed 2026-08-29 |
-| Node/unit/UI tests | passed 2026-08-29, including Inventory reconciliation, RFC 8693 token exchange validation, pagination, first-chunk-before-close streaming, and PostgreSQL concurrency |
+| Node/unit/UI tests | passed 2026-08-29, including bounded external responses, Inventory reconciliation, RFC 8693 token exchange validation, pagination, first-chunk-before-close streaming, PostgreSQL concurrency, UI failure/empty states, API transport, and automated accessibility checks |
 | Worker/D1 tests | passed 2026-08-29, including upgraded-response preservation and D1 audit persistence |
 | Biome, dead-code scan, Worker/client/Node builds | passed 2026-08-29 |
-| PostgreSQL multi-replica integration | passed 2026-08-28 against PostgreSQL 17: shared migrations, catalog, DPoP replay, audit, and two live replicas |
+| PostgreSQL multi-replica integration | passed 2026-08-29 against PostgreSQL 18: shared migrations, catalog, DPoP replay, audit, and two live production-image replicas with readiness/UI checks |
 | Kubernetes deployment manifest | passed 2026-08-28 with `kubectl apply --dry-run=client` |
-| Docker image build | passed 2026-08-28: Node 26.8.1 runtime, pnpm/build tools and optional SQLite native module absent |
+| Docker image startup | passed 2026-08-29: Node 26.8.1, persistent SQLite, health, readiness, UI assets, and non-root uid 65532; CI rebuilds and starts the production image |
 
 ## Live integration matrix
 

@@ -10,6 +10,7 @@ import {
 } from 'jose'
 import type { AgentPrincipal, UserPrincipal } from './domain'
 import { ConflictError } from './domain'
+import { boundedResponseJson } from './external-response'
 import type { HubStore } from './store'
 
 const proofLifetimeSeconds = 300
@@ -33,10 +34,11 @@ interface IssuerKeys {
 export async function discoverIssuer(issuer: string): Promise<IssuerKeys> {
   const response = await fetch(`${issuer}/.well-known/openid-configuration`, {
     headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(10_000),
   })
   if (!response.ok)
     throw new Error(`issuer discovery failed with ${response.status}`)
-  const metadata = await response.json()
+  const metadata = await boundedResponseJson(response)
   if (!metadata || typeof metadata !== 'object')
     throw new Error('issuer discovery response is invalid')
   const value = metadata as Record<string, unknown>

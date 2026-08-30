@@ -16,17 +16,20 @@ FROM node:26-bookworm-slim AS dependencies
 WORKDIR /app
 RUN npm install --global pnpm@11.24.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm install --prod --frozen-lockfile --no-optional && pnpm store prune
+RUN pnpm install --prod --frozen-lockfile && pnpm store prune
 
 FROM node:26-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
+ENV HUB_SQLITE_PATH=/data/kube-cluster-hub.db
 RUN useradd --create-home --uid 65532 app
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=build /src/dist-node ./dist-node
 COPY --from=build /src/dist/client ./dist/client
 COPY migrations ./migrations
 COPY migrations-postgres ./migrations-postgres
+RUN mkdir /data && chown app:app /data
+VOLUME ["/data"]
 USER 65532
 EXPOSE 8080
 CMD ["node", "dist-node/entry-node.js"]

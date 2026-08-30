@@ -39,13 +39,22 @@ export function hubOpenApi(config: Config): object {
       version: apiVersion,
       description:
         'A self-hosted cluster catalog and Kubernetes access Resource Server. Kubernetes remains the resource authorization authority.',
-      license: { name: 'Apache-2.0' },
+      license: { name: 'Apache-2.0', identifier: 'Apache-2.0' },
     },
     servers: [{ url: config.apiUrl }],
     tags: [
-      { name: 'Cluster catalog' },
-      { name: 'Access audit' },
-      { name: 'Kubernetes access' },
+      {
+        name: 'Cluster catalog',
+        description: 'Credential-free Kubernetes cluster directory resources.',
+      },
+      {
+        name: 'Access audit',
+        description: 'Immutable user and Agent access events.',
+      },
+      {
+        name: 'Kubernetes access',
+        description: 'Kubernetes API operations authorized by Kubernetes RBAC.',
+      },
     ],
     components: {
       securitySchemes: {
@@ -83,13 +92,6 @@ export function hubOpenApi(config: Config): object {
           required: true,
           description: 'Current cluster ETag for replacement or deletion.',
           schema: { type: 'string', pattern: '^"[1-9][0-9]*"$' },
-        },
-        ifNoneMatchCreate: {
-          name: 'If-None-Match',
-          in: 'header',
-          required: true,
-          description: 'Use `*` to create a cluster only when it is absent.',
-          schema: { type: 'string', enum: ['*'] },
         },
         pageSize: {
           name: 'pageSize',
@@ -455,6 +457,10 @@ function kubernetesOperation(
       : {}),
     responses: {
       '101': emptyResponse('WebSocket upgrade accepted'),
+      '400': refResponse('invalidRequest'),
+      '401': refResponse('unauthorized'),
+      '403': refResponse('forbidden'),
+      '404': refResponse('notFound'),
       default: {
         description: 'Kubernetes response or Hub gateway problem',
         headers: standardHeaders(),

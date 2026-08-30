@@ -1,8 +1,7 @@
 .git
 .env
-gateway.db
-e2e
+*.db
+coverage
 node_modules
-dist-control-plane
-dist-worker
-/kube-cluster-connector
+dist
+.wrangler

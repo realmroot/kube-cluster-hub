@@ -54,8 +54,12 @@ make run
 
 ```bash
 make verify
-make image
+make verify-image
 ```
+
+`make verify-image` builds the production image and starts it against an
+isolated OIDC fixture to verify SQLite, health, readiness, UI assets, and the
+non-root runtime user.
 
 ## Project status
 

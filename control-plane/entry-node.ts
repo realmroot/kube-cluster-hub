@@ -23,7 +23,9 @@ if (databaseUrl) {
     import('./database-node'),
     import('./migrate-node'),
   ])
-  const sqlite = new NodeDatabaseAdapter('kube-cluster-hub.db')
+  const sqlite = new NodeDatabaseAdapter(
+    process.env.HUB_SQLITE_PATH?.trim() || 'kube-cluster-hub.db',
+  )
   migrateNodeDatabase(sqlite)
   database = sqlite
   closeDatabase = async () => {

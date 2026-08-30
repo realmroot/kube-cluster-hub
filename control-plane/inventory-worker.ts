@@ -1,5 +1,6 @@
 import { parse } from 'yaml'
 import type { Config } from './config'
+import { boundedResponseJson, boundedResponseText } from './external-response'
 import {
   type ClusterProfileDocument,
   type InventoryKubernetesClient,
@@ -104,15 +105,16 @@ export class WorkerInventoryKubernetesClient
         ...(contentType ? { 'Content-Type': contentType } : {}),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(10_000),
     })
     if (!response.ok && !acceptedStatuses.includes(response.status)) {
-      const detail = (await response.text()).slice(0, 2_000)
+      const detail = (await boundedResponseText(response)).slice(0, 2_000)
       throw new Error(
         `Inventory Kubernetes API returned ${response.status}: ${detail}`,
       )
     }
     if (response.status === 204 || response.status === 404) return undefined
-    return response.json()
+    return boundedResponseJson(response)
   }
 }
 

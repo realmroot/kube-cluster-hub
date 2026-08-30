@@ -14,10 +14,11 @@ Kube Cluster Hub is a stable, horizontally scalable cluster catalog and Kubernet
 | Catalog | Credential-free cluster resources with one required reachable API origin and optimistic concurrency. |
 | Inventory interoperability | Optional Cluster Inventory `ClusterProfile` publication, synchronous catalog-write publication, and scheduled repair for Worker and Node. |
 | Proxy | Streaming HTTP for Worker/Node and native Node WebSocket upgrades; dangerous forwarding/impersonation headers stripped. |
-| Persistence | D1 on Worker, PostgreSQL for replicated Node/Docker, SQLite for local single-process development. |
+| Persistence | D1 on Worker, PostgreSQL for replicated Node/Docker, and persistent-volume-backed SQLite for a single Node/Docker process. |
 | UI | PKCE login with reload-safe tab session storage, cluster CRUD dialog, API endpoint/default/enabled metadata, audit list, loading/error/empty states. |
 | Migration | D1/SQLite migration removes Connector/status/inventory fields, preserves direct endpoints, and disables legacy Connector rows for review. |
 | Toolchain | TypeScript 7.0.2, Node 26 images/CI, Vite 8, Vitest 4, Biome 2, Wrangler 4, current React/Hono/Drizzle dependencies. |
+| Quality gates | Recommended OpenAPI validation with zero warnings, production dependency audit, Worker runtime tests, Docker startup smoke test, accessibility checks, coverage thresholds, dead-code scan, strict typecheck, and build/deploy dry runs. |
 | Removed | Go Connector, dispatch JWT/key generator, ServiceAccount impersonation, status heartbeat, private dashboard catalog projection, Go CI/release artifacts. |
 
 ## Deliberately not supported

@@ -88,6 +88,32 @@ describe('Agent identity token exchange', () => {
     await expect(malformed.exchange(agent())).rejects.toMatchObject({
       code: 'invalid_response',
     } satisfies Partial<TokenExchangeError>)
+
+    const unavailable = new AgentTokenExchanger(
+      { issuer, tokenEndpoint: `${issuer}/token`, keys: keys.publicKey },
+      clientId,
+      'exchange-secret',
+      targetAudience,
+      (async () =>
+        new Response('upstream failure', { status: 503 })) as typeof fetch,
+    )
+    await expect(unavailable.exchange(agent())).rejects.toMatchObject({
+      code: 'unavailable',
+    } satisfies Partial<TokenExchangeError>)
+
+    const oversized = new AgentTokenExchanger(
+      { issuer, tokenEndpoint: `${issuer}/token`, keys: keys.publicKey },
+      clientId,
+      'exchange-secret',
+      targetAudience,
+      (async () =>
+        new Response('x', {
+          headers: { 'Content-Length': String(65 * 1024) },
+        })) as typeof fetch,
+    )
+    await expect(oversized.exchange(agent())).rejects.toMatchObject({
+      code: 'invalid_response',
+    } satisfies Partial<TokenExchangeError>)
   })
 })
 

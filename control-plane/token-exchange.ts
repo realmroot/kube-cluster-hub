@@ -1,5 +1,6 @@
 import { type JWTPayload, jwtVerify } from 'jose'
 import type { AgentPrincipal } from './domain'
+import { boundedResponseJson } from './external-response'
 
 const accessTokenType = 'urn:ietf:params:oauth:token-type:access_token'
 const idTokenType = 'urn:ietf:params:oauth:token-type:id_token'
@@ -64,7 +65,25 @@ export class AgentTokenExchanger {
         { cause },
       )
     }
-    const payload = await response.json().catch(() => null)
+    let payload: unknown
+    try {
+      payload = await boundedResponseJson(response)
+    } catch (cause) {
+      if (!response.ok) {
+        throw new TokenExchangeError(
+          response.status >= 500 ? 'unavailable' : 'denied',
+          response.status >= 500
+            ? 'Realmroot token exchange is unavailable'
+            : 'Realmroot token exchange was denied',
+          { cause },
+        )
+      }
+      throw new TokenExchangeError(
+        'invalid_response',
+        'Realmroot token exchange response is invalid',
+        { cause },
+      )
+    }
     if (!response.ok) {
       const error = record(payload)
       throw new TokenExchangeError(

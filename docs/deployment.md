@@ -46,8 +46,14 @@ Copy `.env.example` to `.env`. SQLite is intended only for a single local proces
 
 ```bash
 docker build -t kube-cluster-hub .
-docker run --rm -p 8080:8080 --env-file .env kube-cluster-hub
+docker run --rm -p 8080:8080 --env-file .env \
+  --mount source=kube-cluster-hub-data,target=/data \
+  kube-cluster-hub
 ```
+
+The image defaults `HUB_SQLITE_PATH` to `/data/kube-cluster-hub.db`; keep the
+named volume for durable single-process state. `HUB_DATABASE_URL` selects
+PostgreSQL instead and is required when running more than one replica.
 
 Every PostgreSQL-backed replica is stateless and can serve ordinary requests or WebSocket upgrades. Place replicas behind an HTTP load balancer; sticky sessions are not required beyond the lifetime of an accepted WebSocket. The reference Kubernetes manifest starts two replicas and reads the database URL and Hub Application secret from `kube-cluster-hub-secrets`.
 

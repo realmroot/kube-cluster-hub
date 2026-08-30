@@ -38,8 +38,23 @@ jobs:
       - run: pnpm exec biome check .
       - run: pnpm typecheck
       - run: pnpm check:worker-types
+      - run: pnpm check:openapi
+      - run: pnpm check:security
       - run: pnpm test:coverage
       - run: pnpm test:worker
       - run: pnpm build
       - run: pnpm build:node
       - run: pnpm check:deploy
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with: { version: 11.24.0 }
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:image
